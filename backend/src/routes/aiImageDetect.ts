@@ -14,7 +14,8 @@ const ALLOWED_MIME = [
   "image/jpg",
   "image/png",
   "image/gif",
-  "image/webp"
+  "image/webp",
+  "image/avif"
 ];
 
 const upload = multer({
