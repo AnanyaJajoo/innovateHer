@@ -13,6 +13,8 @@ import {
   PieChart,
   Pie,
   Cell,
+  LineChart,
+  Line,
 } from "recharts";
 
 type ActionTaken = "ignored" | "left" | "reported";
@@ -41,9 +43,12 @@ const ACTION_COLORS: Record<ActionTaken, string> = {
 const BIN_ORDER = ["0-0.2", "0.2-0.4", "0.4-0.6", "0.6-0.8", "0.8-1"];
 const BIN_COLORS = ["#00c2a8", "#5fd4b8", "#f0c674", "#e89d5d", "#e85d5d"];
 
+type TimePeriod = "days" | "months" | "years";
+
 export default function DashboardPage() {
   const [scope, setScope] = useState<"user" | "global">("global");
   const [days, setDays] = useState(7);
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>("days");
   const [data, setData] = useState<StatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -78,6 +83,65 @@ export default function DashboardPage() {
     reported: d.byAction?.reported ?? 0,
   })) ?? [];
 
+  // Aggregate data for scam detection graph based on time period
+  const getScamChartData = () => {
+    if (!data?.stats) return [];
+
+    const aggregated = new Map<string, { count: number; sortKey: string }>();
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+    data.stats.forEach((stat) => {
+      const date = new Date(stat.date);
+      let key: string;
+      let sortKey: string;
+      let displayKey: string;
+
+      if (timePeriod === "days") {
+        key = stat.date; // YYYY-MM-DD
+        sortKey = key;
+        displayKey = `${String(date.getMonth() + 1).padStart(2, "0")}/${String(date.getDate()).padStart(2, "0")}`;
+      } else if (timePeriod === "months") {
+        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+        sortKey = key;
+        displayKey = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+      } else {
+        key = String(date.getFullYear());
+        sortKey = key;
+        displayKey = key;
+      }
+
+      const existing = aggregated.get(key);
+      if (existing) {
+        existing.count += stat.totalEvents;
+      } else {
+        aggregated.set(key, { count: stat.totalEvents, sortKey });
+      }
+    });
+
+    return Array.from(aggregated.entries())
+      .map(([dateKey, { count, sortKey }]) => {
+        const date = new Date(dateKey + (timePeriod === "days" ? "" : timePeriod === "months" ? "-01" : "-01-01"));
+        let displayKey: string;
+        
+        if (timePeriod === "days") {
+          displayKey = `${String(date.getMonth() + 1).padStart(2, "0")}/${String(date.getDate()).padStart(2, "0")}`;
+        } else if (timePeriod === "months") {
+          displayKey = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+        } else {
+          displayKey = dateKey;
+        }
+        
+        return {
+          date: displayKey,
+          dateKey: sortKey, // Keep original for sorting
+          scams: count,
+        };
+      })
+      .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+  };
+
+  const scamChartData = getScamChartData();
+
   const lastStat = data?.stats?.[data.stats.length - 1];
   const riskBins = lastStat?.riskScoreBins ?? [];
   const sortedBins = [...riskBins].sort(
@@ -93,8 +157,8 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-bg text-[#e8e8ec] p-6">
       <div className="max-w-5xl mx-auto">
         <header className="mb-8">
-          <h1 className="text-2xl font-semibold tracking-tight">AI Image Detector — Dashboard</h1>
-          <p className="text-[#8c8c96] text-sm mt-1">Metrics and anonymized stats from extension events</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="text-[#FFFFFF] text-sm mt-1">Metrics and anonymized stats from extension events</p>
         </header>
 
         <div className="flex flex-wrap items-center gap-4 mb-6">
@@ -133,29 +197,70 @@ export default function DashboardPage() {
 
         {!loading && data && (
           <div className="space-y-8">
-            <section className="bg-surface border border-[#2a2a30] rounded-xl p-6">
-              <h2 className="text-sm font-medium uppercase tracking-wider text-[#8c8c96] mb-4">
-                Events per day
-              </h2>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#2a2a30" />
-                    <XAxis dataKey="date" stroke="#8c8c96" fontSize={12} />
-                    <YAxis stroke="#8c8c96" fontSize={12} />
-                    <Tooltip
-                      contentStyle={{ background: "#18181c", border: "1px solid #2a2a30", borderRadius: 8 }}
-                      labelStyle={{ color: "#e8e8ec" }}
-                    />
-                    <Legend />
-                    <Bar dataKey="ignored" stackId="a" fill={ACTION_COLORS.ignored} name="Ignored" />
-                    <Bar dataKey="left" stackId="a" fill={ACTION_COLORS.left} name="Left" />
-                    <Bar dataKey="reported" stackId="a" fill={ACTION_COLORS.reported} name="Reported" />
-                  </BarChart>
-                </ResponsiveContainer>
+            <section className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold tracking-tight text-gray-900">
+                  Scams Detected Over Time
+                </h2>
+                <div className="flex items-center gap-2">
+                  <label htmlFor="timePeriod" className="text-sm text-gray-600">Time Period:</label>
+                  <select
+                    id="timePeriod"
+                    value={timePeriod}
+                    onChange={(e) => setTimePeriod(e.target.value as TimePeriod)}
+                    className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="days">Days</option>
+                    <option value="months">Months</option>
+                    <option value="years">Years</option>
+                  </select>
+                </div>
+              </div>
+              <div className="h-80">
+                {scamChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={scamChartData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <XAxis 
+                        dataKey="date" 
+                        stroke="#6b7280" 
+                        fontSize={12}
+                        tick={{ fill: "#6b7280" }}
+                      />
+                      <YAxis 
+                        stroke="#6b7280" 
+                        fontSize={12}
+                        label={{ value: "Number of Scams", angle: -90, position: "insideLeft", style: { textAnchor: "middle", fill: "#6b7280" } }}
+                        tick={{ fill: "#6b7280" }}
+                      />
+                      <Tooltip
+                        contentStyle={{ 
+                          background: "#ffffff", 
+                          border: "1px solid #e5e7eb", 
+                          borderRadius: 8,
+                          color: "#111827"
+                        }}
+                        labelStyle={{ color: "#111827", fontWeight: 600 }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="scams" 
+                        stroke="#22c55e" 
+                        strokeWidth={2}
+                        dot={{ fill: "#22c55e", r: 4 }}
+                        activeDot={{ r: 6 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-gray-500 text-sm">
+                    No scam data available
+                  </div>
+                )}
               </div>
             </section>
 
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <section className="bg-surface border border-[#2a2a30] rounded-xl p-6">
                 <h2 className="text-sm font-medium uppercase tracking-wider text-[#8c8c96] mb-4">

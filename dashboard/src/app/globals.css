@@ -5,10 +5,10 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap');
 
 :root {
-  --bg: #0f0f12;
-  --surface: #18181c;
+  --bg: #ffffff;
+  --surface: #ffffff;
   --border: #2a2a30;
-  --text: #e8e8ec;
+  --text: #8787ff;
   --text-muted: #8c8c96;
   --accent: #00c2a8;
   --danger: #e85d5d;
