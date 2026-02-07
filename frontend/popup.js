@@ -1,9 +1,13 @@
 (function () {
   'use strict';
 
+  // Dashboard URL: use localhost in dev, replace with your deployed URL in production
+  const DASHBOARD_URL = 'http://localhost:3000';
+
   const elements = {
     currentUrl: document.getElementById('current-url'),
     btnScan: document.getElementById('btn-scan'),
+    btnDashboard: document.getElementById('btn-dashboard'),
     resultsSection: document.getElementById('results-section'),
     resultsList: document.getElementById('results-list'),
     resultsCount: document.getElementById('results-count'),
@@ -90,6 +94,13 @@
   }
 
   elements.btnScan.addEventListener('click', onScanClick);
+
+  elements.btnDashboard.href = DASHBOARD_URL;
+  elements.btnDashboard.addEventListener('click', (e) => {
+    e.preventDefault();
+    chrome.tabs.create({ url: DASHBOARD_URL });
+  });
+
   elements.linkSettings.addEventListener('click', (e) => {
     e.preventDefault();
     // TODO: open options page

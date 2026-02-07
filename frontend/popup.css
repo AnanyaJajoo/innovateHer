@@ -144,6 +144,40 @@ body {
   transform: none;
 }
 
+/* Dashboard button */
+.btn-dashboard {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
+}
+
+.btn-dashboard:hover {
+  background: var(--border);
+  border-color: var(--text-muted);
+  color: var(--text);
+}
+
+.btn-dashboard:active {
+  transform: scale(0.98);
+}
+
+.btn-dashboard-icon {
+  font-size: 16px;
+}
+
 .btn-scan.loading .btn-scan-icon {
   animation: pulse 1s ease-in-out infinite;
 }
