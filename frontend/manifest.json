@@ -8,5 +8,15 @@
     "default_title": "AI Image Detector"
   },
   "permissions": ["activeTab"],
-  "host_permissions": ["<all_urls>", "http://localhost:4000/*"]
+  "host_permissions": ["<all_urls>", "http://localhost:4000/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
 }

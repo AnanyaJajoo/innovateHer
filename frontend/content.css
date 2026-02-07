@@ -1,0 +1,79 @@
+/* Floating risk widget - injected by content script */
+.innovateher-risk-widget {
+  position: fixed;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  z-index: 2147483646;
+  font-family: "DM Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 13px;
+  line-height: 1.3;
+  box-sizing: border-box;
+  pointer-events: auto;
+}
+
+.innovateher-risk-widget__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 12px 10px 10px;
+  border-radius: 10px 0 0 10px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  min-width: 56px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-right: none;
+}
+
+.innovateher-risk-widget__label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(0, 0, 0, 0.6);
+  margin-bottom: 4px;
+}
+
+.innovateher-risk-widget__score {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+}
+
+/* Low: 0-30 green */
+.innovateher-risk-widget__inner.risk-low {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+}
+
+.innovateher-risk-widget__inner.risk-low .innovateher-risk-widget__label {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Medium: 30-60 yellow */
+.innovateher-risk-widget__inner.risk-medium {
+  background: linear-gradient(135deg, #ca8a04 0%, #a16207 100%);
+}
+
+.innovateher-risk-widget__inner.risk-medium .innovateher-risk-widget__label {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+/* High: 60-100 red */
+.innovateher-risk-widget__inner.risk-high {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+}
+
+.innovateher-risk-widget__inner.risk-high .innovateher-risk-widget__label {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+/* Loading / error */
+.innovateher-risk-widget__inner.risk-loading,
+.innovateher-risk-widget__inner.risk-error {
+  background: #374151;
+}
+
+.innovateher-risk-widget__inner.risk-loading .innovateher-risk-widget__label,
+.innovateher-risk-widget__inner.risk-error .innovateher-risk-widget__label {
+  color: rgba(255, 255, 255, 0.9);
+}

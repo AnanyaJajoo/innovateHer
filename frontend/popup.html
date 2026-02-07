@@ -3,45 +3,60 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Scam Detector</title>
+  <title>AI Image Detector</title>
   <link rel="stylesheet" href="popup.css" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet" />
+  <style>
+    /* Critical: Ensures the popup has dimensions to display */
+    body {
+      width: 320px;
+      margin: 0;
+      padding: 0;
+      /* Professional system font stack (no external requests) */
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #ffffff;
+      color: #333333;
+    }
+    .popup {
+      padding: 16px;
+    }
+  </style>
 </head>
 <body>
   <div class="popup">
     <header class="header">
       <div class="logo">
-        <span class="logo-icon" aria-hidden="true">◇</span>
-        <h1 class="title">AI Image Detector</h1>
+        <span class="logo-icon" aria-hidden="true" style="color: #6366f1; font-weight: bold;">◇</span>
+        <h1 class="title" style="font-size: 1.25rem; margin: 0; display: inline;">AI Image Detector</h1>
       </div>
-      <p class="tagline">Check if images on this page are AI-generated</p>
+      <p class="tagline" style="font-size: 0.875rem; color: #666; margin-top: 4px;">Check if images on this page are AI-generated</p>
     </header>
 
+    <hr style="border: 0; border-top: 1px solid #eee; margin: 16px 0;" />
+
     <section class="current-page">
-      <span class="label">Current page</span>
-      <p class="url" id="current-url" title="">—</p>
+      <span class="label" style="font-size: 0.75rem; text-transform: uppercase; color: #999;">Current page</span>
+      <p class="url" id="current-url" title="" style="font-size: 0.875rem; margin: 4px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">—</p>
     </section>
 
-    <section class="risk-section" id="risk-section">
-      <span class="label">Risk score</span>
-      <div class="risk-display" id="risk-display">
-        <span class="risk-value" id="risk-value">—</span>
+    <section class="risk-section" id="risk-section" style="margin-top: 20px;">
+      <span class="label" style="font-size: 0.75rem; text-transform: uppercase; color: #999;">Risk score</span>
+      <div class="risk-display" id="risk-display" style="margin-top: 8px;">
+        <span class="risk-value" id="risk-value" style="font-size: 2rem; font-weight: bold;">—</span>
         <span class="risk-label" id="risk-label"></span>
       </div>
       <p class="risk-reasons" id="risk-reasons" aria-live="polite" hidden></p>
-      <p class="risk-error" id="risk-error" aria-live="polite" hidden></p>
+      <p class="risk-error" id="risk-error" aria-live="polite" style="color: #ef4444; font-size: 0.875rem;" hidden></p>
     </section>
 
-    <a href="#" class="btn-dashboard" id="btn-dashboard" target="_blank" rel="noopener noreferrer" aria-label="Open metrics dashboard">
+    <a href="#" class="btn-dashboard" id="btn-dashboard" target="_blank" rel="noopener noreferrer" 
+       style="display: block; text-align: center; background: #6366f1; color: white; text-decoration: none; padding: 10px; border-radius: 6px; margin-top: 20px; font-weight: 500;">
       Open Dashboard
     </a>
 
-    <footer class="footer">
-      <a href="#" class="link" id="link-settings">Settings</a>
-      <span class="divider">·</span>
-      <a href="#" class="link" id="link-help">Help</a>
+    <footer class="footer" style="margin-top: 20px; padding-top: 12px; border-top: 1px solid #eee; font-size: 0.75rem; text-align: center;">
+      <a href="#" class="link" id="link-settings" style="color: #6366f1; text-decoration: none;">Settings</a>
+      <span class="divider" style="margin: 0 8px; color: #ccc;">·</span>
+      <a href="#" class="link" id="link-help" style="color: #6366f1; text-decoration: none;">Help</a>
     </footer>
   </div>
   <script src="popup.js"></script>
