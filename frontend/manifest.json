@@ -1,11 +1,17 @@
 {
   "manifest_version": 3,
-  "name": "AI Image Detector",
+  "name": "Illume",
   "version": "1.0.1",
   "description": "Detect if images on the current page are AI-generated",
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "AI Image Detector"
+    "default_title": "Illume",
+    "default_icon": "icon.png"
   },
   "permissions": ["activeTab"],
   "host_permissions": ["<all_urls>", "http://localhost:4000/*"],
