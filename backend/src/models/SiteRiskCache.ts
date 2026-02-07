@@ -5,7 +5,7 @@ export interface SiteRiskCacheDocument {
   normalizedUrl: string;
   urlHash: string;
   riskScore: number;
-  reasons: string[];
+  reasons: Array<string | { code: string; meta?: any }>;
   checkedAt: Date;
 }
 
@@ -15,7 +15,7 @@ const siteRiskCacheSchema = new Schema<SiteRiskCacheDocument>(
     normalizedUrl: { type: String, required: true },
     urlHash: { type: String, required: true },
     riskScore: { type: Number, required: true },
-    reasons: { type: [String], required: true },
+    reasons: { type: [Schema.Types.Mixed], required: true },
     checkedAt: { type: Date, required: true }
   },
   { versionKey: false }
