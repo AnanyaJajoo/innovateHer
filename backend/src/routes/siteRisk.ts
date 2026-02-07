@@ -1,9 +1,10 @@
 import { Router } from "express";
-import { SiteRiskCache } from "../models/SiteRiskCache.js";
-import { computeRuleRisk } from "../services/riskRules.js";
-import { checkSafeBrowsing } from "../services/safeBrowsing.js";
-import { hashUrl } from "../utils/hash.js";
-import { normalizeUrl } from "../utils/normalizeUrl.js";
+import { SiteRiskCache } from "../models/SiteRiskCache";
+import { isDbReady } from "../db";
+import { computeRuleRisk } from "../services/riskRules";
+import { checkSafeBrowsing } from "../services/safeBrowsing";
+import { hashUrl } from "../utils/hash";
+import { normalizeUrl } from "../utils/normalizeUrl";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -25,21 +26,23 @@ siteRiskRouter.post("/site-risk", async (req, res) => {
 
   const urlHash = hashUrl(parsed.normalizedUrl);
 
-  const cached = await SiteRiskCache.findOne({
-    urlHash,
-    domain: parsed.domain
-  }).lean();
+  if (isDbReady()) {
+    const cached = await SiteRiskCache.findOne({
+      urlHash,
+      domain: parsed.domain
+    }).lean();
 
-  if (cached && !forceRefresh) {
-    const ageMs = Date.now() - new Date(cached.checkedAt).getTime();
-    if (ageMs < ONE_DAY_MS) {
-      return res.json({
-        domain: cached.domain,
-        normalizedUrl: cached.normalizedUrl,
-        riskScore: cached.riskScore,
-        reasons: cached.reasons,
-        cached: true
-      });
+    if (cached && !forceRefresh) {
+      const ageMs = Date.now() - new Date(cached.checkedAt).getTime();
+      if (ageMs < ONE_DAY_MS) {
+        return res.json({
+          domain: cached.domain,
+          normalizedUrl: cached.normalizedUrl,
+          riskScore: cached.riskScore,
+          reasons: cached.reasons,
+          cached: true
+        });
+      }
     }
   }
 
@@ -67,11 +70,13 @@ siteRiskRouter.post("/site-risk", async (req, res) => {
     checkedAt: new Date()
   };
 
-  await SiteRiskCache.findOneAndUpdate(
-    { urlHash, domain: parsed.domain },
-    payload,
-    { upsert: true, new: true }
-  );
+  if (isDbReady()) {
+    await SiteRiskCache.findOneAndUpdate(
+      { urlHash, domain: parsed.domain },
+      payload,
+      { upsert: true, new: true }
+    );
+  }
 
   return res.json({
     domain: payload.domain,
