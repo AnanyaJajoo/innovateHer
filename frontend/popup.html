@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Image Detector</title>
+  <link rel="stylesheet" href="popup.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="popup">
+    <header class="header">
+      <div class="logo">
+        <span class="logo-icon" aria-hidden="true">◇</span>
+        <h1 class="title">AI Image Detector</h1>
+      </div>
+      <p class="tagline">Check if images on this page are AI-generated</p>
+    </header>
+
+    <section class="current-page">
+      <span class="label">Current page</span>
+      <p class="url" id="current-url" title="">—</p>
+    </section>
+
+    <button type="button" class="btn-scan" id="btn-scan" aria-label="Scan this page for AI-generated images">
+      <span class="btn-scan-icon" aria-hidden="true">Scan</span>
+      Scan this page
+    </button>
+
+    <section class="results" id="results-section" aria-live="polite">
+      <div class="results-header">
+        <span class="results-title">Results</span>
+        <span class="results-count" id="results-count"></span>
+      </div>
+      <div class="results-list" id="results-list">
+        <div class="empty-state" id="empty-state">
+          <span class="empty-icon" aria-hidden="true">🖼</span>
+          <p>No scan yet. Click <strong>Scan this page</strong> to check images for AI generation.</p>
+        </div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <a href="#" class="link" id="link-settings">Settings</a>
+      <span class="divider">·</span>
+      <a href="#" class="link" id="link-help">Help</a>
+    </footer>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
