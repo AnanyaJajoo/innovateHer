@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   LineChart,
@@ -79,8 +78,6 @@ function aggregateByGranularity(
   return entries;
 }
 
-type TimePeriod = "days" | "months" | "years";
-
 export default function DashboardPage() {
   const [scope, setScope] = useState<"user" | "global">("global");
   const [xAxisGranularity, setXAxisGranularity] = useState<XAxisGranularity>("days");
@@ -135,12 +132,6 @@ export default function DashboardPage() {
           <p className="text-[#6e6e73] text-sm mt-1">
             Number of scams detected over time
           </p>
-          <Link
-            href="/backend-test"
-            className="inline-block mt-2 text-sm text-accent hover:underline"
-          >
-            Test backend API →
-          </Link>
         </header>
 
         <div className="flex flex-wrap items-center gap-4 mb-6">

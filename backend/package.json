@@ -3,9 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "dev": "tsx watch src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "test:db": "tsx src/testDb.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
@@ -16,6 +17,7 @@
     "@types/express": "^4.17.21",
     "@types/node": "^22.10.2",
     "ts-node-dev": "^2.0.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.6.3"
   }
 }
