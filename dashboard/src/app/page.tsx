@@ -30,8 +30,8 @@ interface StatsResponse {
   userId?: string;
 }
 
-const LINE_COLOR = "#7c3aed";
-const AREA_FILL = "rgba(124, 58, 237, 0.08)";
+const LINE_COLOR = "#424874";
+const AREA_FILL = "rgba(243, 205, 238, 0.4)";
 
 function formatDateLabel(dateStr: string, granularity: XAxisGranularity): string {
   const d = new Date(dateStr + "T12:00:00");
@@ -125,37 +125,39 @@ export default function DashboardPage() {
   }, [data?.stats, xAxisGranularity]);
 
   return (
-    <div className="min-h-screen bg-white text-[#1d1d1f] p-6 flex flex-col">
+    <div className="min-h-screen text-[#424874] p-6 flex flex-col" style={{ background: "var(--bg)" }}>
       <div className="max-w-5xl mx-auto flex-1 w-full">
-        <header className="mb-8">
-          <h1 className="text-2xl font-semibold tracking-tight">Scams detected</h1>
-          <p className="text-[#6e6e73] text-sm mt-1">
+        <header className="mb-10">
+          <h1 className="text-3xl font-bold tracking-tight text-[#424874]" style={{ fontFamily: "Nunito, sans-serif" }}>
+            Scams detected
+          </h1>
+          <p className="text-[#7b7fa3] text-base mt-2">
             Number of scams detected over time
           </p>
         </header>
 
-        <div className="flex flex-wrap items-center gap-4 mb-6">
-          <div className="flex rounded-lg border border-[#e5e5e7] overflow-hidden">
+        <div className="flex flex-wrap items-center gap-4 mb-8">
+          <div className="flex rounded-full overflow-hidden border-2 border-[#F3CDEE] p-1 shadow-sm" style={{ boxShadow: "0 4px 16px rgba(243, 205, 238, 0.3)" }}>
             <button
               onClick={() => setScope("global")}
-              className={`px-4 py-2 text-sm font-medium ${scope === "global" ? "bg-accent text-white" : "bg-[#f5f5f7] text-[#6e6e73] hover:bg-[#e5e5e7]"}`}
+              className={`px-5 py-2.5 text-sm font-semibold rounded-full transition-all ${scope === "global" ? "bg-[#424874] text-white shadow-md" : "text-[#424874] hover:bg-[#F3CDEE]/40"}`}
             >
               Global
             </button>
             <button
               onClick={() => setScope("user")}
-              className={`px-4 py-2 text-sm font-medium ${scope === "user" ? "bg-accent text-white" : "bg-[#f5f5f7] text-[#6e6e73] hover:bg-[#e5e5e7]"}`}
+              className={`px-5 py-2.5 text-sm font-semibold rounded-full transition-all ${scope === "user" ? "bg-[#424874] text-white shadow-md" : "text-[#424874] hover:bg-[#F3CDEE]/40"}`}
             >
               My stats
             </button>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-sm text-[#6e6e73]">X-axis:</span>
+            <span className="text-sm font-medium text-[#7b7fa3]"></span>
             <select
               value={xAxisGranularity}
               onChange={(e) => setXAxisGranularity(e.target.value as XAxisGranularity)}
-              className="bg-white border border-[#e5e5e7] rounded-lg px-3 py-2 text-sm text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-accent"
+              className="bg-white/80 border-2 border-[#F3CDEE] rounded-2xl px-4 py-2.5 text-sm font-medium text-[#424874] focus:outline-none focus:ring-2 focus:ring-[#F3CDEE] focus:ring-offset-2"
             >
               <option value="days">Days</option>
               <option value="months">Months</option>
@@ -165,11 +167,11 @@ export default function DashboardPage() {
 
           {xAxisGranularity === "days" && (
             <div className="flex items-center gap-2">
-              <span className="text-sm text-[#6e6e73]">Range:</span>
+              <span className="text-sm font-medium text-[#7b7fa3]">Range:</span>
               <select
                 value={rangeDays}
                 onChange={(e) => setRangeDays(Number(e.target.value))}
-                className="bg-white border border-[#e5e5e7] rounded-lg px-3 py-2 text-sm text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-accent"
+                className="bg-white/80 border-2 border-[#F3CDEE] rounded-2xl px-4 py-2.5 text-sm font-medium text-[#424874] focus:outline-none focus:ring-2 focus:ring-[#F3CDEE] focus:ring-offset-2"
               >
                 <option value={7}>7 days</option>
                 <option value={14}>14 days</option>
@@ -181,58 +183,63 @@ export default function DashboardPage() {
         </div>
 
         {loading && (
-          <div className="text-[#6e6e73] text-sm py-8">Loading…</div>
+          <div className="text-[#7b7fa3] text-base py-10 font-medium">Loading…</div>
         )}
 
         {!loading && data && (
-          <section className="bg-white border border-[#e5e5e7] rounded-xl p-6 shadow-sm">
+          <section
+            className="rounded-3xl p-8 border-2 border-[#F3CDEE]"
+            style={{ background: "var(--surface)", boxShadow: "0 8px 32px rgba(243, 205, 238, 0.25)" }}
+          >
             <div className="h-[400px] w-full">
               {chartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart
                     data={chartData}
-                    margin={{ top: 8, right: 8, left: 0, bottom: 24 }}
+                    margin={{ top: 8, right: 8, left: 56, bottom: 24 }}
                   >
                     <defs>
                       <linearGradient id="scamsGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={LINE_COLOR} stopOpacity={0.2} />
-                        <stop offset="100%" stopColor={LINE_COLOR} stopOpacity={0} />
+                        <stop offset="0%" stopColor="#F3CDEE" stopOpacity={0.6} />
+                        <stop offset="100%" stopColor="#F3CDEE" stopOpacity={0.05} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="#e5e5e7"
+                      strokeDasharray="4 4"
+                      stroke="#F3CDEE"
                       vertical={false}
                     />
                     <XAxis
                       dataKey="display"
-                      stroke="#6e6e73"
-                      fontSize={12}
+                      stroke="#7b7fa3"
+                      fontSize={13}
                       tickLine={false}
-                      axisLine={{ stroke: "#e5e5e7" }}
+                      axisLine={{ stroke: "#F3CDEE", strokeWidth: 2 }}
                     />
                     <YAxis
                       dataKey="scams"
-                      stroke="#6e6e73"
-                      fontSize={12}
+                      stroke="#7b7fa3"
+                      fontSize={13}
                       tickLine={false}
                       axisLine={false}
                       label={{
                         value: "Scams detected",
                         angle: -90,
                         position: "insideLeft",
-                        style: { fill: "#6e6e73", fontSize: 12 },
+                        dx: -24,
+                        style: { fill: "#7b7fa3", fontSize: 13, fontFamily: "Nunito, sans-serif" },
                       }}
                     />
                     <Tooltip
                       contentStyle={{
                         background: "#fff",
-                        border: "1px solid #e5e5e7",
-                        borderRadius: 8,
-                        boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                        border: "2px solid #F3CDEE",
+                        borderRadius: 16,
+                        boxShadow: "0 8px 24px rgba(66, 72, 116, 0.12)",
+                        fontFamily: "Nunito, sans-serif",
                       }}
-                      labelStyle={{ color: "#1d1d1f" }}
-                      formatter={(value: number) => [value, "Scams detected"]}
+                      labelStyle={{ color: "#424874", fontWeight: 700 }}
+                      formatter={(value: number) => [value.toLocaleString(), "Scams detected"]}
                       labelFormatter={(_, payload) =>
                         payload[0]?.payload?.display ?? ""
                       }
@@ -247,14 +254,14 @@ export default function DashboardPage() {
                       type="monotone"
                       dataKey="scams"
                       stroke={LINE_COLOR}
-                      strokeWidth={2}
+                      strokeWidth={3}
                       dot={false}
-                      activeDot={{ r: 4, fill: LINE_COLOR, stroke: "#fff", strokeWidth: 2 }}
+                      activeDot={{ r: 6, fill: "#424874", stroke: "#F3CDEE", strokeWidth: 3 }}
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-full flex items-center justify-center text-[#6e6e73] text-sm border border-dashed border-[#e5e5e7] rounded-lg">
+                <div className="h-full flex items-center justify-center text-[#7b7fa3] text-base font-medium border-2 border-dashed border-[#F3CDEE] rounded-2xl bg-white/50">
                   No scam data in this period. Data will appear as the extension detects scams.
                 </div>
               )}
@@ -263,19 +270,22 @@ export default function DashboardPage() {
         )}
 
         {!loading && !data && (
-          <div className="text-[#6e6e73] py-8">Could not load stats. Make sure the API is running.</div>
+          <div className="text-[#7b7fa3] py-10 font-medium">Could not load stats. Make sure the API is running.</div>
         )}
       </div>
 
-      <footer className="mt-12 pt-6 border-t border-[#e5e5e7]">
+      <footer className="mt-12 pt-8 border-t-2 border-[#F3CDEE]">
         <div className="max-w-5xl mx-auto">
-          <section className="bg-[#f5f5f7] border border-[#e5e5e7] rounded-xl p-4 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-accent flex items-center justify-center text-white font-semibold text-lg shrink-0">
+          <section
+            className="rounded-3xl p-5 flex items-center gap-4 border-2 border-[#F3CDEE]"
+            style={{ background: "var(--surface)", boxShadow: "0 4px 20px rgba(243, 205, 238, 0.2)" }}
+          >
+            <div className="w-14 h-14 rounded-full bg-[#424874] flex items-center justify-center text-white font-bold text-xl shrink-0 shadow-md">
               {userId.charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">
-              <p className="font-medium text-[#1d1d1f] truncate">{userId}</p>
-              <p className="text-sm text-[#6e6e73]">View and manage your detection stats</p>
+              <p className="font-bold text-[#424874] truncate text-lg">{userId}</p>
+              <p className="text-sm text-[#7b7fa3] font-medium">View and manage your detection stats</p>
             </div>
           </section>
         </div>

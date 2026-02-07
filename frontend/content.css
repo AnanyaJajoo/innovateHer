@@ -42,7 +42,7 @@
 
 /* Low: 0-30 green */
 .innovateher-risk-widget__inner.risk-low {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  background: linear-gradient(135deg, #89de87 0%, #89de87 100%);
 }
 
 .innovateher-risk-widget__inner.risk-low .innovateher-risk-widget__label {

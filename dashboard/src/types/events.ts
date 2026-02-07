@@ -8,7 +8,8 @@ export interface EventLog {
   category: string;
   price?: number;
   actionTaken: ActionTaken;
-  // Optional: hashed path for privacy when storing server-side
+  /** Optional: for per-user stats; absent = counts in global only */
+  userId?: string;
   pathHash?: string;
 }
 
