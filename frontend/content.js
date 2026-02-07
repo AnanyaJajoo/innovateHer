@@ -3,11 +3,12 @@
 (function () {
   var DASHBOARD_URL = 'http://localhost:3000';
 
-  function getColor(score) {
-    if (score == null) return '#6b7280';
-    if (score < 30) return '#059669';
-    if (score < 60) return '#ca8a04';
-    return '#dc2626';
+  /* Light pastel text colors (widget bg stays white, border = light purple) */
+  function getTextColor(score) {
+    if (score == null) return '#b5b8c4';
+    if (score < 30) return '#7ba892';
+    if (score < 60) return '#c4a574';
+    return '#d4a0a0';
   }
 
   function riskLabel(score) {
@@ -35,23 +36,28 @@
   }
 
   var expandedStyles =
-    '.panel{display:none;width:320px;background:#fff;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);border:1px solid #e5e5e7;overflow:hidden;font-family:system-ui,sans-serif;font-size:14px;color:#1d1d1f;}' +
+    '@import url("https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap");' +
+    '.panel{display:none;width:320px;background:#fefaff;border-radius:20px;box-shadow:0 8px 32px rgba(243,205,238,0.35);border:2px solid #F3CDEE;overflow:hidden;font-family:"Nunito",system-ui,sans-serif;font-size:14px;color:#5c5c6a;}' +
     '.panel.open{display:block;}' +
-    '.panel-inner{padding:16px;}' +
-    '.header{margin-bottom:12px;}.title{font-size:16px;font-weight:600;margin:0;}.tagline{font-size:12px;color:#6e6e73;margin:4px 0 0;}' +
-    '.section{margin-top:12px;}.section .label{font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#6e6e73;margin-bottom:4px;}' +
-    '.current-page{background:#f5f5f7;border:1px solid #e5e5e7;border-radius:8px;padding:10px 12px;}.current-page .url{font-size:12px;margin:0;word-break:break-all;max-height:2.6em;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}' +
-    '.risk-section{background:#f5f5f7;border:1px solid #e5e5e7;border-radius:8px;padding:10px 12px;}' +
-    '.risk-display{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin-top:4px;}' +
-    '.risk-value{font-size:20px;font-weight:700;}.risk-value.low{color:#0d9488;}.risk-value.medium{color:#d97706;}.risk-value.high{color:#c53929;}' +
-    '.risk-label{font-size:12px;color:#6e6e73;}.risk-reasons{margin:6px 0 0;font-size:11px;color:#6e6e73;line-height:1.4;}' +
-    '.risk-error{margin:6px 0 0;font-size:12px;color:#c53929;}' +
-    '.btn-dashboard{display:block;text-align:center;background:#7c3aed;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;margin-top:16px;font-weight:600;font-size:13px;}' +
-    '.btn-dashboard:hover{background:#6d28d9;color:#fff;}' +
-    '.footer{margin-top:16px;padding-top:12px;border-top:1px solid #e5e5e7;font-size:12px;text-align:center;}' +
-    '.footer a{color:#7c3aed;text-decoration:none;}' +
-    '.pill{cursor:pointer;user-select:none;padding:12px 18px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);border:3px solid #7c3aed;font-size:16px;font-weight:700;color:#fff;}' +
-    '.pill:hover{opacity:0.95;}.container{display:flex;flex-direction:row-reverse;align-items:center;gap:0;}';
+    '.panel-inner{padding:18px;}' +
+    '.header{position:relative;margin-bottom:14px;padding-right:36px;}.title{font-size:17px;font-weight:700;margin:0;color:#424874;letter-spacing:-0.02em;}.tagline{font-size:12px;color:#b5b8c4;margin:6px 0 0;font-weight:500;}' +
+    '.btn-close{position:absolute;top:0;right:0;width:28px;height:28px;border:none;background:#fdf5fc;border-radius:50%;color:#b5b8c4;font-size:18px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;border:2px solid #F3CDEE;transition:color .2s,background .2s;}' +
+    '.btn-close:hover{background:#F3CDEE;color:#424874;}' +
+    '.section{margin-top:14px;}.section .label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#b5b8c4;margin-bottom:6px;}' +
+    '.current-page{background:#fdf5fc;border:2px solid #F3CDEE;border-radius:14px;padding:12px 14px;}.current-page .url{font-size:13px;margin:0;word-break:break-all;max-height:2.6em;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;color:#5c5c6a;font-weight:600;}' +
+    '.risk-section{background:#fdf5fc;border:2px solid #F3CDEE;border-radius:14px;padding:12px 14px;}' +
+    '.risk-display{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-top:4px;}' +
+    '.risk-value{font-size:22px;font-weight:700;}.risk-value.low{color:#7ba892;}.risk-value.medium{color:#c4a574;}.risk-value.high{color:#d4a0a0;}' +
+    '.risk-label{font-size:12px;font-weight:600;color:#b5b8c4;}.risk-reasons{margin:8px 0 0;font-size:11px;color:#b5b8c4;line-height:1.45;}' +
+    '.risk-error{margin:8px 0 0;font-size:12px;color:#d4a0a0;font-weight:600;}' +
+    '.btn-dashboard{display:block;text-align:center;background:#424874;color:#fff;text-decoration:none;padding:12px 18px;border-radius:14px;margin-top:18px;font-weight:700;font-size:13px;border:none;cursor:pointer;box-shadow:0 4px 16px rgba(66,72,116,0.2);}' +
+    '.btn-dashboard:hover{background:#353b62;color:#fff;}' +
+    '.footer{margin-top:18px;padding-top:14px;border-top:2px solid #F3CDEE;font-size:12px;text-align:center;}' +
+    '.footer a{color:#424874;text-decoration:none;font-weight:600;}' +
+    '.pill{cursor:pointer;user-select:none;padding:14px 20px;border-radius:16px;box-shadow:0 6px 24px rgba(243,205,238,0.3);border:2px solid #F3CDEE;font-size:16px;font-weight:700;background:#fff;color:#b5b8c4;font-family:"Nunito",system-ui,sans-serif;}' +
+    '.pill:hover{box-shadow:0 8px 28px rgba(243,205,238,0.4);}' +
+    '.container{display:flex;flex-direction:row-reverse;align-items:center;gap:0;}' +
+    '.container.panel-open .pill{display:none!important;}';
 
   function showPopup() {
     if (document.getElementById('innovateher-risk-popup')) return;
@@ -69,18 +75,19 @@
 
     root.innerHTML =
       '<style>' + expandedStyles + '</style>' +
-      '<div class="container">' +
+      '<div class="container" id="container">' +
       '<div class="panel" id="panel">' +
       '<div class="panel-inner">' +
-      '<header class="header"><div class="title">AI Image Detector</div><p class="tagline">Check if images on this page are AI-generated</p></header>' +
+      '<header class="header"><div class="title">AI Image Detector</div><p class="tagline">Check if images on this page are AI-generated</p><button type="button" class="btn-close" id="btn-close" aria-label="Close">×</button></header>' +
       '<section class="section current-page"><span class="label">Current page</span><p class="url" id="panel-url">—</p></section>' +
       '<section class="section risk-section"><span class="label">Risk score</span><div class="risk-display"><span class="risk-value" id="panel-score">—</span><span class="risk-label" id="panel-label"></span></div><p class="risk-reasons" id="panel-reasons"></p><p class="risk-error" id="panel-error" style="display:none;"></p></section>' +
       '<a href="#" class="btn-dashboard" id="panel-dashboard">Open Dashboard</a>' +
-      '<footer class="footer"><a href="#" id="panel-settings">Settings</a><span style="margin:0 6px;color:#ccc;">·</span><a href="#" id="panel-help">Help</a></footer>' +
+      '<footer class="footer"><a href="#" id="panel-settings">Settings</a><span style="margin:0 6px;color:#F3CDEE;">·</span><a href="#" id="panel-help">Help</a></footer>' +
       '</div></div>' +
       '<div class="pill" id="pill"><span id="txt">Risk: …</span></div>' +
       '</div>';
 
+    var container = root.getElementById('container');
     var pill = root.getElementById('pill');
     var panel = root.getElementById('panel');
     var txt = root.getElementById('txt');
@@ -94,12 +101,11 @@
     panelUrl.title = window.location.href;
 
     function updatePill(score, err) {
-      var bg = getColor(score);
-      host.style.background = 'transparent';
-      pill.style.background = bg;
+      pill.style.background = '#fff';
+      pill.style.color = '';
+      txt.style.color = err ? '#b5b8c4' : getTextColor(score);
       if (err) {
         txt.textContent = 'Risk: !';
-        pill.style.background = '#6b7280';
       } else if (score != null) {
         txt.textContent = 'Risk: ' + score;
       } else {
@@ -127,16 +133,31 @@
       }
     }
 
+    function closePanel() {
+      panel.classList.remove('open');
+      container.classList.remove('panel-open');
+    }
+
+    function openPanel() {
+      panelUrl.textContent = formatUrl(window.location.href);
+      panelUrl.title = window.location.href;
+      updatePanel();
+      panel.classList.add('open');
+      container.classList.add('panel-open');
+    }
+
     pill.addEventListener('click', function (e) {
       e.stopPropagation();
       if (panel.classList.contains('open')) {
-        panel.classList.remove('open');
+        closePanel();
       } else {
-        panelUrl.textContent = formatUrl(window.location.href);
-        panelUrl.title = window.location.href;
-        updatePanel();
-        panel.classList.add('open');
+        openPanel();
       }
+    });
+
+    root.getElementById('btn-close').addEventListener('click', function (e) {
+      e.preventDefault();
+      closePanel();
     });
 
     root.getElementById('panel-dashboard').addEventListener('click', function (e) {
@@ -148,7 +169,7 @@
 
     document.addEventListener('click', function (e) {
       if (panel.classList.contains('open') && !host.contains(e.target)) {
-        panel.classList.remove('open');
+        closePanel();
       }
     });
 
