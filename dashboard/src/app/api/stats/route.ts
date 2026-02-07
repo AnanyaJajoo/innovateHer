@@ -6,7 +6,7 @@ import { getDailyUserStats, getGlobalStats } from "@/lib/storage";
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const scope = searchParams.get("scope") ?? "global";
-  const days = Math.min(31, Math.max(1, parseInt(searchParams.get("days") ?? "7", 10) || 7));
+  const days = Math.min(365, Math.max(1, parseInt(searchParams.get("days") ?? "7", 10) || 7));
   const userId = searchParams.get("userId") ?? "default";
 
   try {

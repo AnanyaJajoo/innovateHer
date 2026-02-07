@@ -1,29 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  BarChart,
-  Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
   ResponsiveContainer,
   CartesianGrid,
-  Legend,
-  PieChart,
-  Pie,
-  Cell,
-  LineChart,
-  Line,
+  Area,
+  ComposedChart,
 } from "recharts";
 
-type ActionTaken = "ignored" | "left" | "reported";
+type XAxisGranularity = "days" | "months" | "years";
 
 interface DailyStat {
   date: string;
   totalEvents: number;
   uniqueDomains?: number;
-  byAction: Record<ActionTaken, number>;
+  byAction: Record<string, number>;
   riskScoreBins: { bin: string; count: number }[];
 }
 
@@ -34,31 +30,81 @@ interface StatsResponse {
   userId?: string;
 }
 
-const ACTION_COLORS: Record<ActionTaken, string> = {
-  ignored: "#8c8c96",
-  left: "#00c2a8",
-  reported: "#e85d5d",
-};
+const LINE_COLOR = "#7c3aed";
+const AREA_FILL = "rgba(124, 58, 237, 0.08)";
 
-const BIN_ORDER = ["0-0.2", "0.2-0.4", "0.4-0.6", "0.6-0.8", "0.8-1"];
-const BIN_COLORS = ["#00c2a8", "#5fd4b8", "#f0c674", "#e89d5d", "#e85d5d"];
+function formatDateLabel(dateStr: string, granularity: XAxisGranularity): string {
+  const d = new Date(dateStr + "T12:00:00");
+  if (granularity === "days") {
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  }
+  if (granularity === "months") {
+    return d.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+  }
+  return d.getFullYear().toString();
+}
+
+function aggregateByGranularity(
+  stats: DailyStat[],
+  granularity: XAxisGranularity
+): { date: string; display: string; scams: number }[] {
+  if (!stats.length) return [];
+
+  const bucket = new Map<string, number>();
+  for (const s of stats) {
+    const d = new Date(s.date + "T12:00:00");
+    let key: string;
+    if (granularity === "days") {
+      key = s.date;
+    } else if (granularity === "months") {
+      key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    } else {
+      key = String(d.getFullYear());
+    }
+    bucket.set(key, (bucket.get(key) ?? 0) + s.totalEvents);
+  }
+
+  const entries = Array.from(bucket.entries())
+    .map(([date, scams]) => ({
+      date,
+      display: formatDateLabel(
+        granularity === "days" ? date : date + (granularity === "months" ? "-01" : "-01-01"),
+        granularity
+      ),
+      scams,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  return entries;
+}
 
 type TimePeriod = "days" | "months" | "years";
 
 export default function DashboardPage() {
   const [scope, setScope] = useState<"user" | "global">("global");
-  const [days, setDays] = useState(7);
-  const [timePeriod, setTimePeriod] = useState<TimePeriod>("days");
+  const [xAxisGranularity, setXAxisGranularity] = useState<XAxisGranularity>("days");
+  const [rangeDays, setRangeDays] = useState(31);
   const [data, setData] = useState<StatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState<string>("Guest");
+
+  useEffect(() => {
+    setUserId(localStorage.getItem("userId") ?? "Guest");
+  }, []);
+
+  const fetchDays = useMemo(() => {
+    if (xAxisGranularity === "years") return 365;
+    if (xAxisGranularity === "months") return 365;
+    return rangeDays;
+  }, [xAxisGranularity, rangeDays]);
 
   const fetchStats = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
         scope,
-        days: String(days),
-        userId: typeof window !== "undefined" ? localStorage.getItem("userId") ?? "default" : "default",
+        days: String(fetchDays),
+        userId: userId === "Guest" ? "default" : userId,
       });
       const res = await fetch(`/api/stats?${params}`);
       if (!res.ok) throw new Error("Failed to fetch");
@@ -69,287 +115,173 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [scope, days]);
+  }, [scope, fetchDays, userId]);
 
   useEffect(() => {
     fetchStats();
   }, [fetchStats]);
 
-  const chartData = data?.stats?.map((d) => ({
-    date: d.date.slice(5),
-    events: d.totalEvents,
-    ignored: d.byAction?.ignored ?? 0,
-    left: d.byAction?.left ?? 0,
-    reported: d.byAction?.reported ?? 0,
-  })) ?? [];
-
-  // Aggregate data for scam detection graph based on time period
-  const getScamChartData = () => {
-    if (!data?.stats) return [];
-
-    const aggregated = new Map<string, { count: number; sortKey: string }>();
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-    data.stats.forEach((stat) => {
-      const date = new Date(stat.date);
-      let key: string;
-      let sortKey: string;
-      let displayKey: string;
-
-      if (timePeriod === "days") {
-        key = stat.date; // YYYY-MM-DD
-        sortKey = key;
-        displayKey = `${String(date.getMonth() + 1).padStart(2, "0")}/${String(date.getDate()).padStart(2, "0")}`;
-      } else if (timePeriod === "months") {
-        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-        sortKey = key;
-        displayKey = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
-      } else {
-        key = String(date.getFullYear());
-        sortKey = key;
-        displayKey = key;
-      }
-
-      const existing = aggregated.get(key);
-      if (existing) {
-        existing.count += stat.totalEvents;
-      } else {
-        aggregated.set(key, { count: stat.totalEvents, sortKey });
-      }
-    });
-
-    return Array.from(aggregated.entries())
-      .map(([dateKey, { count, sortKey }]) => {
-        const date = new Date(dateKey + (timePeriod === "days" ? "" : timePeriod === "months" ? "-01" : "-01-01"));
-        let displayKey: string;
-        
-        if (timePeriod === "days") {
-          displayKey = `${String(date.getMonth() + 1).padStart(2, "0")}/${String(date.getDate()).padStart(2, "0")}`;
-        } else if (timePeriod === "months") {
-          displayKey = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
-        } else {
-          displayKey = dateKey;
-        }
-        
-        return {
-          date: displayKey,
-          dateKey: sortKey, // Keep original for sorting
-          scams: count,
-        };
-      })
-      .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
-  };
-
-  const scamChartData = getScamChartData();
-
-  const lastStat = data?.stats?.[data.stats.length - 1];
-  const riskBins = lastStat?.riskScoreBins ?? [];
-  const sortedBins = [...riskBins].sort(
-    (a, b) => BIN_ORDER.indexOf(a.bin) - BIN_ORDER.indexOf(b.bin)
-  );
-  const actionPieData = lastStat
-    ? (["ignored", "left", "reported"] as const)
-        .filter((a) => (lastStat.byAction[a] ?? 0) > 0)
-        .map((key) => ({ name: key, value: lastStat.byAction[key], color: ACTION_COLORS[key] }))
-    : [];
+  const chartData = useMemo(() => {
+    if (!data?.stats?.length) return [];
+    return aggregateByGranularity(data.stats, xAxisGranularity);
+  }, [data?.stats, xAxisGranularity]);
 
   return (
-    <div className="min-h-screen bg-bg text-[#e8e8ec] p-6">
-      <div className="max-w-5xl mx-auto">
+    <div className="min-h-screen bg-white text-[#1d1d1f] p-6 flex flex-col">
+      <div className="max-w-5xl mx-auto flex-1 w-full">
         <header className="mb-8">
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-[#FFFFFF] text-sm mt-1">Metrics and anonymized stats from extension events</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Scams detected</h1>
+          <p className="text-[#6e6e73] text-sm mt-1">
+            Number of scams detected over time
+          </p>
         </header>
 
         <div className="flex flex-wrap items-center gap-4 mb-6">
-          <div className="flex rounded-lg border border-[#2a2a30] overflow-hidden">
+          <div className="flex rounded-lg border border-[#e5e5e7] overflow-hidden">
             <button
               onClick={() => setScope("global")}
-              className={`px-4 py-2 text-sm font-medium ${scope === "global" ? "bg-accent text-[#0f0f12]" : "bg-surface text-[#8c8c96] hover:bg-[#2a2a30]"}`}
+              className={`px-4 py-2 text-sm font-medium ${scope === "global" ? "bg-accent text-white" : "bg-[#f5f5f7] text-[#6e6e73] hover:bg-[#e5e5e7]"}`}
             >
               Global
             </button>
             <button
               onClick={() => setScope("user")}
-              className={`px-4 py-2 text-sm font-medium ${scope === "user" ? "bg-accent text-[#0f0f12]" : "bg-surface text-[#8c8c96] hover:bg-[#2a2a30]"}`}
+              className={`px-4 py-2 text-sm font-medium ${scope === "user" ? "bg-accent text-white" : "bg-[#f5f5f7] text-[#6e6e73] hover:bg-[#e5e5e7]"}`}
             >
               My stats
             </button>
           </div>
+
           <div className="flex items-center gap-2">
-            <label htmlFor="days" className="text-sm text-[#8c8c96]">Days</label>
+            <span className="text-sm text-[#6e6e73]">X-axis:</span>
             <select
-              id="days"
-              value={days}
-              onChange={(e) => setDays(Number(e.target.value))}
-              className="bg-surface border border-[#2a2a30] rounded-lg px-3 py-2 text-sm text-[#e8e8ec] focus:outline-none focus:ring-2 focus:ring-accent"
+              value={xAxisGranularity}
+              onChange={(e) => setXAxisGranularity(e.target.value as XAxisGranularity)}
+              className="bg-white border border-[#e5e5e7] rounded-lg px-3 py-2 text-sm text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-accent"
             >
-              <option value={7}>7</option>
-              <option value={14}>14</option>
-              <option value={31}>31</option>
+              <option value="days">Days</option>
+              <option value="months">Months</option>
+              <option value="years">Years</option>
             </select>
           </div>
+
+          {xAxisGranularity === "days" && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-[#6e6e73]">Range:</span>
+              <select
+                value={rangeDays}
+                onChange={(e) => setRangeDays(Number(e.target.value))}
+                className="bg-white border border-[#e5e5e7] rounded-lg px-3 py-2 text-sm text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-accent"
+              >
+                <option value={7}>7 days</option>
+                <option value={14}>14 days</option>
+                <option value={31}>31 days</option>
+                <option value={90}>90 days</option>
+              </select>
+            </div>
+          )}
         </div>
 
         {loading && (
-          <div className="text-[#8c8c96] text-sm py-8">Loading stats…</div>
+          <div className="text-[#6e6e73] text-sm py-8">Loading…</div>
         )}
 
         {!loading && data && (
-          <div className="space-y-8">
-            <section className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold tracking-tight text-gray-900">
-                  Scams Detected Over Time
-                </h2>
-                <div className="flex items-center gap-2">
-                  <label htmlFor="timePeriod" className="text-sm text-gray-600">Time Period:</label>
-                  <select
-                    id="timePeriod"
-                    value={timePeriod}
-                    onChange={(e) => setTimePeriod(e.target.value as TimePeriod)}
-                    className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+          <section className="bg-white border border-[#e5e5e7] rounded-xl p-6 shadow-sm">
+            <div className="h-[400px] w-full">
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart
+                    data={chartData}
+                    margin={{ top: 8, right: 8, left: 0, bottom: 24 }}
                   >
-                    <option value="days">Days</option>
-                    <option value="months">Months</option>
-                    <option value="years">Years</option>
-                  </select>
+                    <defs>
+                      <linearGradient id="scamsGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={LINE_COLOR} stopOpacity={0.2} />
+                        <stop offset="100%" stopColor={LINE_COLOR} stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="#e5e5e7"
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="display"
+                      stroke="#6e6e73"
+                      fontSize={12}
+                      tickLine={false}
+                      axisLine={{ stroke: "#e5e5e7" }}
+                    />
+                    <YAxis
+                      dataKey="scams"
+                      stroke="#6e6e73"
+                      fontSize={12}
+                      tickLine={false}
+                      axisLine={false}
+                      label={{
+                        value: "Scams detected",
+                        angle: -90,
+                        position: "insideLeft",
+                        style: { fill: "#6e6e73", fontSize: 12 },
+                      }}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: "#fff",
+                        border: "1px solid #e5e5e7",
+                        borderRadius: 8,
+                        boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                      }}
+                      labelStyle={{ color: "#1d1d1f" }}
+                      formatter={(value: number) => [value, "Scams detected"]}
+                      labelFormatter={(_, payload) =>
+                        payload[0]?.payload?.display ?? ""
+                      }
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="scams"
+                      fill="url(#scamsGradient)"
+                      stroke="none"
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="scams"
+                      stroke={LINE_COLOR}
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 4, fill: LINE_COLOR, stroke: "#fff", strokeWidth: 2 }}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-[#6e6e73] text-sm border border-dashed border-[#e5e5e7] rounded-lg">
+                  No scam data in this period. Data will appear as the extension detects scams.
                 </div>
-              </div>
-              <div className="h-80">
-                {scamChartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={scamChartData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                      <XAxis 
-                        dataKey="date" 
-                        stroke="#6b7280" 
-                        fontSize={12}
-                        tick={{ fill: "#6b7280" }}
-                      />
-                      <YAxis 
-                        stroke="#6b7280" 
-                        fontSize={12}
-                        label={{ value: "Number of Scams", angle: -90, position: "insideLeft", style: { textAnchor: "middle", fill: "#6b7280" } }}
-                        tick={{ fill: "#6b7280" }}
-                      />
-                      <Tooltip
-                        contentStyle={{ 
-                          background: "#ffffff", 
-                          border: "1px solid #e5e7eb", 
-                          borderRadius: 8,
-                          color: "#111827"
-                        }}
-                        labelStyle={{ color: "#111827", fontWeight: 600 }}
-                      />
-                      <Line 
-                        type="monotone" 
-                        dataKey="scams" 
-                        stroke="#22c55e" 
-                        strokeWidth={2}
-                        dot={{ fill: "#22c55e", r: 4 }}
-                        activeDot={{ r: 6 }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-full flex items-center justify-center text-gray-500 text-sm">
-                    No scam data available
-                  </div>
-                )}
-              </div>
-            </section>
-
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <section className="bg-surface border border-[#2a2a30] rounded-xl p-6">
-                <h2 className="text-sm font-medium uppercase tracking-wider text-[#8c8c96] mb-4">
-                  Actions (last day)
-                </h2>
-                <div className="h-48 flex items-center justify-center">
-                  {actionPieData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={actionPieData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={48}
-                          outerRadius={72}
-                          paddingAngle={2}
-                          dataKey="value"
-                          nameKey="name"
-                          label={({ name, value }) => `${name}: ${value}`}
-                        >
-                          {actionPieData.map((entry, i) => (
-                            <Cell key={i} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          contentStyle={{ background: "#18181c", border: "1px solid #2a2a30", borderRadius: 8 }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <span className="text-[#8c8c96] text-sm">No data for last day</span>
-                  )}
-                </div>
-              </section>
-
-              <section className="bg-surface border border-[#2a2a30] rounded-xl p-6">
-                <h2 className="text-sm font-medium uppercase tracking-wider text-[#8c8c96] mb-4">
-                  Risk score bins (last day)
-                </h2>
-                <div className="h-48">
-                  {sortedBins.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={sortedBins}
-                        layout="vertical"
-                        margin={{ top: 0, right: 8, left: 0, bottom: 0 }}
-                      >
-                        <XAxis type="number" stroke="#8c8c96" fontSize={12} />
-                        <YAxis type="category" dataKey="bin" stroke="#8c8c96" fontSize={12} width={48} />
-                        <Tooltip
-                          contentStyle={{ background: "#18181c", border: "1px solid #2a2a30", borderRadius: 8 }}
-                        />
-                        <Bar dataKey="count" fill="#00c2a8" radius={[0, 4, 4, 0]} name="Count" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="h-full flex items-center justify-center text-[#8c8c96] text-sm">
-                      No data for last day
-                    </div>
-                  )}
-                </div>
-              </section>
+              )}
             </div>
-
-            {scope === "global" && data.stats.length > 0 && (
-              <section className="bg-surface border border-[#2a2a30] rounded-xl p-6">
-                <h2 className="text-sm font-medium uppercase tracking-wider text-[#8c8c96] mb-2">
-                  Global summary
-                </h2>
-                <p className="text-sm text-[#8c8c96]">
-                  Total events in period:{" "}
-                  <span className="text-[#e8e8ec] font-medium">
-                    {data.stats.reduce((s, d) => s + d.totalEvents, 0)}
-                  </span>
-                  {" · "}
-                  Unique domains (last day):{" "}
-                  <span className="text-[#e8e8ec] font-medium">
-                    {(data.stats[data.stats.length - 1] as { uniqueDomains?: number })?.uniqueDomains ?? "—"}
-                  </span>
-                </p>
-              </section>
-            )}
-          </div>
+          </section>
         )}
 
         {!loading && !data && (
-          <div className="text-[#8c8c96] py-8">Could not load stats. Make sure the API is running.</div>
+          <div className="text-[#6e6e73] py-8">Could not load stats. Make sure the API is running.</div>
         )}
       </div>
+
+      <footer className="mt-12 pt-6 border-t border-[#e5e5e7]">
+        <div className="max-w-5xl mx-auto">
+          <section className="bg-[#f5f5f7] border border-[#e5e5e7] rounded-xl p-4 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-accent flex items-center justify-center text-white font-semibold text-lg shrink-0">
+              {userId.charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <p className="font-medium text-[#1d1d1f] truncate">{userId}</p>
+              <p className="text-sm text-[#6e6e73]">View and manage your detection stats</p>
+            </div>
+          </section>
+        </div>
+      </footer>
     </div>
   );
 }
