@@ -1,5 +1,5 @@
 import express from "express";
-import { siteRiskRouter } from "./routes/siteRisk.js";
+import { siteRiskRouter } from "./routes/siteRisk";
 
 export const createApp = () => {
   const app = express();
