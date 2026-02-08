@@ -209,6 +209,7 @@
           riskData.error = null;
           updatePill(riskData.score, false);
           updatePanel();
+          maybeFetchSuggestions();
         }
       }
     );
@@ -232,7 +233,15 @@
       suggestionsError.style.display = 'none';
     }
 
-    if (isAmazonTemuOrWalmart && !suggestionsFetched) {
+    function maybeFetchSuggestions() {
+      if (!isAmazonTemuOrWalmart || suggestionsFetched) return;
+      if (riskData.score === 0) {
+        suggestionsSection.style.display = 'none';
+        suggestionsLoading.style.display = 'none';
+        suggestionsError.style.display = 'none';
+        return;
+      }
+
       suggestionsFetched = true;
       suggestionsSection.style.display = 'block';
       suggestionsLoading.style.display = 'block';
