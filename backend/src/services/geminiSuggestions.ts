@@ -1,5 +1,3 @@
-import OpenAI from "openai";
-
 export interface ProductSuggestion {
   name: string;
   description: string;
@@ -15,17 +13,15 @@ export interface SuggestionsResult {
 export async function getSuggestedProducts(
   productName: string
 ): Promise<SuggestionsResult> {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return { suggestions: [], error: "OPENAI_API_KEY is not configured" };
+    return { suggestions: [], error: "GEMINI_API_KEY is not configured" };
   }
-
-  const openai = new OpenAI({ apiKey });
 
   const prompt = `You are a shopping assistant. A user is looking at this product: "${productName}".
 
-Suggest 3 similar, real products that can be found on Amazon. For each product provide:
-1. name: The exact or near-exact product name as it would appear on Amazon
+Suggest 1 similar, real products that can be found on Amazon. For each product provide:
+1. name: The shortened product name as it would appear on Amazon (3 words max)
 2. description: A one-sentence description (max 80 characters)
 3. estimatedPriceRange: An approximate price range like "$20-$35"
 
@@ -33,19 +29,45 @@ Respond ONLY with a valid JSON array. No markdown, no code fences, no explanatio
 [
   {
     "name": "Product Name Here",
-    "description": "Brief description here",
+    "description": "Brief description here (one sentence)",
     "estimatedPriceRange": "$XX-$YY"
   }
 ]`;
 
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+
   try {
-    console.log(`[InnovateHer] Sending request to OpenAI for product: "${productName}"`);
-    const completion = await openai.responses.create({
-      model: "gpt-5-nano",
-      input: prompt,
+    console.log(`[InnovateHer] Sending request to Gemini for product: "${productName}"`);
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 1024,
+        },
+      }),
     });
 
-    const responseText = (completion.output_text).trim();
+    if (!response.ok) {
+      const errorBody = await response.text();
+      return { suggestions: [], error: `Gemini API error (${response.status}): ${errorBody}` };
+    }
+
+    const data = await response.json() as {
+      candidates?: Array<{
+        content?: { parts?: Array<{ text?: string }> };
+      }>;
+    };
+
+    const responseText =
+      data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
+
+    if (!responseText) {
+      return { suggestions: [], error: "Empty response from Gemini" };
+    }
 
     // Strip potential markdown code fences
     const cleaned = responseText
@@ -60,7 +82,7 @@ Respond ONLY with a valid JSON array. No markdown, no code fences, no explanatio
     }> = JSON.parse(cleaned);
 
     if (!Array.isArray(parsed)) {
-      return { suggestions: [], error: "Unexpected OpenAI response format" };
+      return { suggestions: [], error: "Unexpected Gemini response format" };
     }
 
     const suggestions: ProductSuggestion[] = parsed
@@ -76,6 +98,6 @@ Respond ONLY with a valid JSON array. No markdown, no code fences, no explanatio
     return { suggestions };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    return { suggestions: [], error: `OpenAI API error: ${message}` };
+    return { suggestions: [], error: `Gemini API error: ${message}` };
   }
 }
