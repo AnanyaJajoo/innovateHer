@@ -46,7 +46,7 @@ export async function extractProductName(
     try {
       const parsed = JSON.parse(raw);
       const name = findProductName(parsed);
-      if (name) {
+      if (isUsableName(name)) {
         return { productName: name, source: "json-ld" };
       }
     } catch {
@@ -56,13 +56,13 @@ export async function extractProductName(
 
   // Priority 2: og:title meta tag
   const ogTitle = $('meta[property="og:title"]').attr("content");
-  if (ogTitle && ogTitle.trim().length > 2) {
+  if (isUsableName(ogTitle)) {
     return { productName: ogTitle.trim(), source: "og:title" };
   }
 
   // Priority 3: <meta name="title">
   const metaTitle = $('meta[name="title"]').attr("content");
-  if (metaTitle && metaTitle.trim().length > 2) {
+  if (isUsableName(metaTitle)) {
     return { productName: metaTitle.trim(), source: "meta-title" };
   }
 
@@ -75,14 +75,77 @@ export async function extractProductName(
         ""
       )
       .trim();
-    return {
-      productName: cleaned || titleText.trim(),
-      source: "html-title",
-    };
+    const candidate = cleaned || titleText.trim();
+    if (isUsableName(candidate)) {
+      return {
+        productName: candidate,
+        source: "html-title",
+      };
+    }
+  }
+
+  const fallbackFromUrl = extractNameFromUrl(url);
+  if (fallbackFromUrl) {
+    return { productName: fallbackFromUrl, source: null };
   }
 
   return { productName: null, source: null };
 }
+
+const GENERIC_NAMES = new Set([
+  "temu",
+  "amazon",
+  "amazon.com",
+  "temu.com",
+  "home",
+  "shop",
+  "store"
+]);
+
+const isUsableName = (value: string | null | undefined): value is string => {
+  if (!value || value.trim().length <= 2) {
+    return false;
+  }
+  const cleaned = value.trim().toLowerCase();
+  return !GENERIC_NAMES.has(cleaned);
+};
+
+export const extractNameFromUrl = (url: string): string | null => {
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname;
+    if (!path || path === "/") {
+      return null;
+    }
+
+    const lastSegment = path.split("/").filter(Boolean).pop();
+    if (!lastSegment) {
+      return null;
+    }
+
+    const withoutExt = lastSegment.replace(/\.html?$/i, "");
+    const withoutId = withoutExt.replace(/-g-\d+$/i, "");
+    const normalized = withoutId
+      .replace(/[-_]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!normalized || normalized.length <= 2) {
+      return null;
+    }
+
+    const titleCased = normalized
+      .split(" ")
+      .map((word) =>
+        word.length > 2 ? word[0].toUpperCase() + word.slice(1) : word
+      )
+      .join(" ");
+
+    return isUsableName(titleCased) ? titleCased : null;
+  } catch {
+    return null;
+  }
+};
 
 function findProductName(node: unknown): string | null {
   if (!node || typeof node !== "object") return null;
