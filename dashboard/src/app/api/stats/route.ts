@@ -8,12 +8,17 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const scope = searchParams.get("scope") ?? "global";
   const days = Math.min(365, Math.max(1, parseInt(searchParams.get("days") ?? "7", 10) || 7));
-  const userId = searchParams.get("userId") ?? "default";
+  const userId = searchParams.get("userId");
+  const anonId = searchParams.get("anonId");
   const debugSeed = searchParams.get("debugSeed");
+  const simulated = searchParams.get("simulated");
 
   try {
-    const params = new URLSearchParams({ scope, days: String(days), userId });
+    const params = new URLSearchParams({ scope, days: String(days) });
+    if (userId) params.set("userId", userId);
+    if (anonId) params.set("anonId", anonId);
     if (debugSeed) params.set("debugSeed", debugSeed);
+    if (simulated) params.set("simulated", simulated);
     const res = await fetch(`${BACKEND_URL}/api/stats?${params.toString()}`, {
       cache: "no-store"
     });

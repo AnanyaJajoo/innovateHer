@@ -33,7 +33,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     // We intentionally ignore any third-party console warnings/errors on visited pages.
     // Only the explicit scan URL is logged and sent to the backend.
     console.log('[Scan] URL:', message.url, 'anonId:', anonId);
-    fetch(BACKEND_URL + '/api/site-risk', {
+    fetch(BACKEND_URL + '/api/score', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: message.url, anonId: anonId, userId: 'default' }),

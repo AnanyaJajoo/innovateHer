@@ -4,6 +4,25 @@ import { FlagEvent } from "../models/FlagEvent";
 import { RiskAssessment } from "../models/RiskAssessment";
 import { ScanEvent } from "../models/ScanEvent";
 
+export const computeScamWebsitesVisited = (assessments: Array<{
+  domain?: string;
+  urlHash?: string;
+  riskScore?: number;
+}>) => {
+  const domains = new Set<string>();
+  const urlHashes = new Set<string>();
+  for (const assessment of assessments) {
+    const score = Number(assessment.riskScore ?? 0);
+    if (score < RISK_HIGH_THRESHOLD) continue;
+    if (assessment.domain) domains.add(assessment.domain);
+    if (assessment.urlHash) urlHashes.add(assessment.urlHash);
+  }
+  return {
+    scamWebsitesVisited: domains.size,
+    highRiskUrlHashes: Array.from(urlHashes)
+  };
+};
+
 export const getProtectionFactor = (score: number) => {
   if (score >= 90) return PROTECTION_FACTORS.critical;
   if (score >= 80) return PROTECTION_FACTORS.high;
@@ -66,15 +85,30 @@ export const getUserMetricsSummary = async (input: {
     assessmentMatch.createdAt = { $gte: (match.$or as Array<any>)[0].timestamp.$gte };
   }
 
-  const [pagesScanned, highRiskDetected] = await Promise.all([
+  const [pagesScanned, highRiskDetected, assessments] = await Promise.all([
     ScanEvent.countDocuments(match).catch(() => 0),
     RiskAssessment.countDocuments({
       ...assessmentMatch,
       riskScore: { $gte: RISK_HIGH_THRESHOLD }
-    }).catch(() => 0)
+    }).catch(() => 0),
+    RiskAssessment.find(assessmentMatch)
+      .select({ domain: 1, urlHash: 1, riskScore: 1 })
+      .lean()
+      .catch(() => [])
   ]);
 
-  return { pagesScanned, highRiskDetected };
+  const { scamWebsitesVisited, highRiskUrlHashes } =
+    computeScamWebsitesVisited(assessments);
+
+  const totalHighRiskVisits =
+    highRiskUrlHashes.length === 0
+      ? 0
+      : await ScanEvent.countDocuments({
+          ...match,
+          urlHash: { $in: highRiskUrlHashes }
+        }).catch(() => 0);
+
+  return { pagesScanned, highRiskDetected, scamWebsitesVisited, totalHighRiskVisits };
 };
 
 export const getTopFlaggedDomains = async (limit: number) => {

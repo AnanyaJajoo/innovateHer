@@ -4,12 +4,14 @@ const BACKEND_URL = process.env.BACKEND_URL ?? "http://127.0.0.1:4000";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const userId = searchParams.get("userId") ?? "";
-  const anonId = searchParams.get("anonId") ?? "";
+  const userId = searchParams.get("userId");
+  const anonId = searchParams.get("anonId");
   const limit = searchParams.get("limit") ?? "50";
 
   try {
-    const params = new URLSearchParams({ userId, anonId, limit });
+    const params = new URLSearchParams({ limit });
+    if (userId) params.set("userId", userId);
+    if (anonId) params.set("anonId", anonId);
     const res = await fetch(`${BACKEND_URL}/api/visited?${params.toString()}`, {
       cache: "no-store"
     });

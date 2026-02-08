@@ -1,0 +1,10 @@
+{
+    "source":  "playwright",
+    "imageUrl":  "https://images-na.ssl-images-amazon.com/images/G/01/error/en_US/29._TTD_.jpg",
+    "alternates":  [
+                       "https://images-na.ssl-images-amazon.com/images/G/01/error/en_US/title._TTD_.png"
+                   ],
+    "debug":  {
+                  "selectedReason":  "largest-rendered-image"
+              }
+}

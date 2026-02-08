@@ -4,21 +4,12 @@ import { Event } from "../models/Event";
 import { Scan } from "../models/Scan";
 import { SiteRiskCache } from "../models/SiteRiskCache";
 import { RiskAssessment } from "../models/RiskAssessment";
-import { RISK_HIGH_THRESHOLD } from "../config/metrics";
 import { buildDebugSeries } from "../services/debugSeries";
+import { buildStatsSeries } from "../services/statsSeries";
+import { RISK_HIGH_THRESHOLD } from "../config/metrics";
 
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
-
-const getDateKey = (date: Date) => date.toISOString().slice(0, 10);
-
-const getRiskBin = (score: number) => {
-  if (score < 20) return "0-20";
-  if (score < 40) return "20-40";
-  if (score < 60) return "40-60";
-  if (score < 80) return "60-80";
-  return "80-100";
-};
 
 export const statsRouter = Router();
 
@@ -29,6 +20,14 @@ statsRouter.get("/stats", async (req, res) => {
   const userId = typeof req.query?.userId === "string" ? req.query.userId : undefined;
   const anonId = typeof req.query?.anonId === "string" ? req.query.anonId : undefined;
   const debugSeed = req.query?.debugSeed as string | undefined;
+  const simulated = req.query?.simulated as string | undefined;
+
+  // Validate user scope requires user identifier
+  if (scope === "user" && !userId && !anonId) {
+    return res.status(400).json({
+      error: "missing_user_identifier"
+    });
+  }
 
   if (!isDbReady()) {
     console.warn(`Stats: DB not ready (scope=${scope}, days=${days})`);
@@ -86,93 +85,16 @@ statsRouter.get("/stats", async (req, res) => {
       })
   ]);
 
-  const statsByDate = new Map<
-    string,
-    {
-      totalEvents: number;
-      byAction: Record<string, number>;
-      riskScoreBins: Record<string, number>;
-      uniqueDomains: Set<string>;
-    }
-  >();
-
-  const ensure = (dateKey: string) => {
-    if (!statsByDate.has(dateKey)) {
-      statsByDate.set(dateKey, {
-        totalEvents: 0,
-        byAction: { ignored: 0, left: 0, reported: 0, proceeded: 0 },
-        riskScoreBins: {},
-        uniqueDomains: new Set()
-      });
-    }
-    return statsByDate.get(dateKey)!;
-  };
-
-  for (const assessment of assessments) {
-    if (!assessment.createdAt) continue;
-    const dateKey = getDateKey(new Date(assessment.createdAt));
-    const bucket = ensure(dateKey);
-    const score = Number(assessment.riskScore ?? 0);
-    const bin = getRiskBin(score);
-    bucket.riskScoreBins[bin] = (bucket.riskScoreBins[bin] ?? 0) + 1;
-    if (score >= RISK_HIGH_THRESHOLD) {
-      bucket.totalEvents += 1;
-    }
-  }
-
-  for (const event of events) {
-    if (!event.createdAt) continue;
-    const dateKey = getDateKey(new Date(event.createdAt));
-    const bucket = ensure(dateKey);
-    const action = event.actionTaken ?? "ignored";
-    bucket.byAction[action] = (bucket.byAction[action] ?? 0) + 1;
-  }
-
-  if (scope === "global") {
-    for (const cache of caches) {
-      if (!cache.checkedAt) continue;
-      const dateKey = getDateKey(new Date(cache.checkedAt));
-      const bucket = ensure(dateKey);
-      if (cache.domain) bucket.uniqueDomains.add(cache.domain);
-    }
-  } else {
-    for (const scan of scans) {
-      if (!scan.createdAt) continue;
-      const dateKey = getDateKey(new Date(scan.createdAt));
-      const bucket = ensure(dateKey);
-      if (scan.domain) bucket.uniqueDomains.add(scan.domain);
-    }
-  }
-
-  const stats = [];
-  for (let i = days - 1; i >= 0; i -= 1) {
-    const date = new Date();
-    date.setUTCDate(date.getUTCDate() - i);
-    const dateKey = getDateKey(date);
-    const bucket =
-      statsByDate.get(dateKey) ??
-      ({
-        totalEvents: 0,
-        byAction: { ignored: 0, left: 0, reported: 0, proceeded: 0 },
-        riskScoreBins: {},
-        uniqueDomains: new Set()
-      } as const);
-
-    stats.push({
-      date: dateKey,
-      totalEvents: bucket.totalEvents,
-      uniqueDomains: bucket.uniqueDomains.size,
-      byAction: bucket.byAction,
-      riskScoreBins: Object.entries(bucket.riskScoreBins).map(([bin, count]) => ({
-        bin,
-        count
-      }))
-    });
-  }
-
-  const nonZeroDays = stats.filter(
-    (entry) => entry.totalEvents > 0 || entry.uniqueDomains > 0
-  ).length;
+  const stats = buildStatsSeries({
+    scope: scope === "user" ? "user" : "global",
+    days,
+    userId,
+    anonId,
+    assessments,
+    events,
+    scans,
+    caches
+  });
 
   const realSeries = {
     scope,
@@ -181,13 +103,85 @@ statsRouter.get("/stats", async (req, res) => {
     ...(scope === "user" ? { userId: userId ?? anonId ?? "default" } : {})
   };
 
-  const isDev = process.env.NODE_ENV !== "production";
-  const shouldSeed =
-    isDev &&
-    (nonZeroDays < 10 || debugSeed === "1" || debugSeed === "true");
-  const debugSeries = shouldSeed
-    ? buildDebugSeries({ days, points: 2200, seed: debugSeed ?? "dev-seed" })
+  const shouldSimulate =
+    scope === "global" &&
+    (simulated === "1" ||
+      simulated === "true" ||
+      process.env.SIMULATED_GLOBAL_STATS === "1" ||
+      process.env.SIMULATED_GLOBAL_STATS === "true");
+  const debugSeries = shouldSimulate
+    ? buildDebugSeries({ days, points: 2200, seed: debugSeed ?? "simulated" })
     : [];
+
+  const listLimit = clamp(Number(req.query?.limit ?? 20), 1, 100);
+  const baseMatch = scope === "user"
+    ? userId
+      ? { userId }
+      : { anonId }
+    : {};
+
+  const [riskyDomains, safeDomains] = await Promise.all([
+    scope === "global"
+      ? SiteRiskCache.aggregate([
+          { $sort: { checkedAt: -1 } },
+          {
+            $group: {
+              _id: "$domain",
+              riskScore: { $first: "$riskScore" },
+              checkedAt: { $first: "$checkedAt" }
+            }
+          },
+          { $match: { riskScore: { $gte: RISK_HIGH_THRESHOLD } } },
+          { $sort: { checkedAt: -1 } },
+          { $limit: listLimit },
+          { $project: { _id: 0, domain: "$_id", riskScore: 1, checkedAt: 1 } }
+        ]).catch(() => [])
+      : Scan.aggregate([
+          { $match: baseMatch },
+          { $sort: { createdAt: -1 } },
+          {
+            $group: {
+              _id: "$domain",
+              riskScore: { $first: "$riskScore" },
+              createdAt: { $first: "$createdAt" }
+            }
+          },
+          { $match: { riskScore: { $gte: RISK_HIGH_THRESHOLD } } },
+          { $sort: { createdAt: -1 } },
+          { $limit: listLimit },
+          { $project: { _id: 0, domain: "$_id", riskScore: 1, createdAt: 1 } }
+        ]).catch(() => []),
+    scope === "global"
+      ? SiteRiskCache.aggregate([
+          { $sort: { checkedAt: -1 } },
+          {
+            $group: {
+              _id: "$domain",
+              riskScore: { $first: "$riskScore" },
+              checkedAt: { $first: "$checkedAt" }
+            }
+          },
+          { $match: { riskScore: { $lt: RISK_HIGH_THRESHOLD } } },
+          { $sort: { checkedAt: -1 } },
+          { $limit: listLimit },
+          { $project: { _id: 0, domain: "$_id", riskScore: 1, checkedAt: 1 } }
+        ]).catch(() => [])
+      : Scan.aggregate([
+          { $match: baseMatch },
+          { $sort: { createdAt: -1 } },
+          {
+            $group: {
+              _id: "$domain",
+              riskScore: { $first: "$riskScore" },
+              createdAt: { $first: "$createdAt" }
+            }
+          },
+          { $match: { riskScore: { $lt: RISK_HIGH_THRESHOLD } } },
+          { $sort: { createdAt: -1 } },
+          { $limit: listLimit },
+          { $project: { _id: 0, domain: "$_id", riskScore: 1, createdAt: 1 } }
+        ]).catch(() => [])
+  ]);
 
   if (scope === "user") {
     const domains = new Set<string>();
@@ -207,6 +201,8 @@ statsRouter.get("/stats", async (req, res) => {
     ...realSeries,
     realSeries: realSeries.stats,
     debugSeries,
-    debugUsed: shouldSeed
+    simulatedUsed: shouldSimulate,
+    safeDomains,
+    riskyDomains
   });
 });

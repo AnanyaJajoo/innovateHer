@@ -23,14 +23,15 @@ const getRiskBucket = (score?: number) => {
 
 export const eventsRouter = Router();
 
-eventsRouter.post("/event", async (req, res) => {
+const handleEvent = async (req: any, res: any) => {
   const {
     userId,
     anonId,
     domain,
     url,
     riskScore,
-    actionTaken
+    actionTaken,
+    timestamp
   } = req.body ?? {};
 
   const normalizedAction = ["ignored", "left", "reported", "proceeded"].includes(actionTaken)
@@ -38,7 +39,11 @@ eventsRouter.post("/event", async (req, res) => {
     : undefined;
 
   if (isDbReady()) {
-    const expiresAt = new Date(Date.now() + THIRTY_DAYS_MS);
+    const parsedTimestamp =
+      typeof timestamp === "string" || typeof timestamp === "number"
+        ? new Date(timestamp)
+        : new Date();
+    const expiresAt = new Date(parsedTimestamp.getTime() + THIRTY_DAYS_MS);
     const riskScoreBucket = getRiskBucket(riskScore);
     let normalizedDomain = domain;
     let urlHash: string | undefined;
@@ -59,7 +64,8 @@ eventsRouter.post("/event", async (req, res) => {
       domain: normalizedDomain,
       riskScoreBucket,
       actionTaken: normalizedAction,
-      expiresAt
+      expiresAt,
+      createdAt: parsedTimestamp
     }).catch(console.error);
 
     if (normalizedAction === "reported") {
@@ -74,4 +80,7 @@ eventsRouter.post("/event", async (req, res) => {
   }
 
   return res.json({ ok: true });
-});
+};
+
+eventsRouter.post("/event", handleEvent);
+eventsRouter.post("/events", handleEvent);

@@ -4,6 +4,8 @@ export interface DebugSeriesPoint {
   uniqueDomains: number;
   byAction: Record<string, number>;
   riskScoreBins: { bin: string; count: number }[];
+  cumulativeEvents?: number;
+  cumulativeUniqueDomains?: number;
 }
 
 const mulberry32 = (seed: number) => {
@@ -77,5 +79,15 @@ export const buildDebugSeries = (input: {
     });
   }
 
-  return series;
+  const sorted = series.sort((a, b) => a.date.localeCompare(b.date));
+  let cumulativeEvents = 0;
+  let cumulativeUnique = 0;
+  for (const entry of sorted) {
+    cumulativeEvents += entry.totalEvents;
+    cumulativeUnique += entry.uniqueDomains;
+    entry.cumulativeEvents = cumulativeEvents;
+    entry.cumulativeUniqueDomains = cumulativeUnique;
+  }
+
+  return sorted;
 };
