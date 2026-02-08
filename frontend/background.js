@@ -30,35 +30,28 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       sendResponse({ error: 'Missing url' });
       return true;
     }
-    fetch(BACKEND_URL + '/api/site-risk', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: message.url }),
-    })
-      .then(function (res) {
-        return res.json().then(function (data) {
-          if (!res.ok) {
-            sendResponse({ error: data.error || 'Request failed' });
-            return;
-          }
-          sendResponse({ riskScore: data.riskScore, reasons: data.reasons });
-        });
+    getOrCreateUserId().then(function (anonId) {
+      console.log('[Scan] URL:', message.url, 'anonId:', anonId);
+      fetch(BACKEND_URL + '/api/score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: message.url, anonId: anonId, userId: 'default' }),
       })
-      .catch(function () {
-        sendResponse({ error: 'Backend unreachable' });
-      });
+        .then(function (res) {
+          return res.json().then(function (data) {
+            if (!res.ok) {
+              sendResponse({ error: data.error || 'Request failed' });
+              return;
+            }
+            sendResponse({ riskScore: data.riskScore, reasons: data.reasons });
+          });
+        })
+        .catch(function () {
+          sendResponse({ error: 'Backend unreachable' });
+        });
+    });
     return true;
   }
-<<<<<<< HEAD
-  getOrCreateUserId().then(function (anonId) {
-    // We intentionally ignore any third-party console warnings/errors on visited pages.
-    // Only the explicit scan URL is logged and sent to the backend.
-    console.log('[Scan] URL:', message.url, 'anonId:', anonId);
-    fetch(BACKEND_URL + '/api/score', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: message.url, anonId: anonId, userId: 'default' }),
-=======
 
   if (message.type === 'GET_PRODUCT_SUGGESTIONS') {
     if (!message.url) {
@@ -69,23 +62,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: message.url }),
->>>>>>> origin/main
     })
       .then(function (res) {
         return res.json().then(function (data) {
           if (!res.ok) {
-<<<<<<< HEAD
-            sendResponse({ error: data.error || 'Request failed' });
-            return;
-          }
-          sendResponse({ riskScore: data.riskScore, reasons: data.reasons });
-        });
-      })
-      .catch(function () {
-        sendResponse({ error: 'Backend unreachable' });
-      });
-  });
-=======
             sendResponse({ error: data.error || 'Request failed', suggestions: [] });
             return;
           }
@@ -127,6 +107,5 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   sendResponse({ error: 'Unknown message type' });
->>>>>>> origin/main
   return true;
 });

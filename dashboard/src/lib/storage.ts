@@ -107,17 +107,17 @@ export function getDailyUserStats(userId: string, days: number = 7): DailyUserSt
   return result;
 }
 
-/** Fake global daily total in 500k–900k; varies a lot day-to-day but stable per date */
+/** Fake global daily total in 500k–800k; varies a lot day-to-day but stable per date */
 function fakeGlobalTotalForDate(dateKey: string): number {
   let h = 0;
   for (let i = 0; i < dateKey.length; i++) h = (h * 31 + dateKey.charCodeAt(i)) >>> 0;
-  // Strong mixing so consecutive dates get very different values across 500k–900k
+  // Strong mixing so consecutive dates get very different values across 500k–800k
   h ^= h >>> 16;
   h = Math.imul(h, 0x85ebca6b);
   h ^= h >>> 13;
   h = Math.imul(h, 0xc2b2ae35);
   h ^= h >>> 16;
-  const range = 400_001;
+  const range = 300_001;
   return 500_000 + ((h >>> 0) % range);
 }
 

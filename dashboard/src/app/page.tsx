@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ScatterChart,
-  Scatter,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
@@ -96,27 +96,16 @@ export default function DashboardPage() {
   const [rangeDays, setRangeDays] = useState(31);
   const [data, setData] = useState<StatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [userScamsTotal, setUserScamsTotal] = useState(0);
   const [userId, setUserId] = useState<string>("Guest");
   const [anonId, setAnonId] = useState<string>("");
-  const [visited, setVisited] = useState<
-    Array<{
-      domain: string;
-      normalizedUrl?: string;
-      urlHash: string;
-      riskScore?: number;
-      confidence?: number;
-      timestamp: string;
-    }>
-  >([]);
 
   useEffect(() => {
     const storedUserId = localStorage.getItem("userId");
     setUserId(storedUserId && storedUserId.trim() ? storedUserId : "default");
 
-    // Use the same anonUserId that the extension uses, or generate one
     let storedAnonId = localStorage.getItem("anonUserId");
     if (!storedAnonId) {
-      // Generate a new anonId if not present (same logic as extension)
       storedAnonId = crypto?.randomUUID?.() ??
         `anon-${Date.now()}-${Math.random().toString(16).slice(2)}`;
       localStorage.setItem("anonUserId", storedAnonId);
@@ -138,7 +127,6 @@ export default function DashboardPage() {
         days: String(fetchDays),
       });
 
-      // For user scope, pass anonId (preferred) or userId
       if (scope === "user") {
         if (userId && userId !== "Guest") {
           params.set("userId", userId);
@@ -150,8 +138,7 @@ export default function DashboardPage() {
       const res = await fetch(`/api/stats?${params}`);
       const json = (await res.json().catch(() => null)) as StatsResponse | null;
       if (!res.ok) {
-        if (res.status === 400 && json?.error === "missing_user_identifier") {
-          // Ensure anonId exists and retry once
+        if (res.status === 400 && (json as any)?.error === "missing_user_identifier") {
           let storedAnonId = localStorage.getItem("anonUserId");
           if (!storedAnonId) {
             storedAnonId =
@@ -176,6 +163,25 @@ export default function DashboardPage() {
     fetchStats();
   }, [fetchStats]);
 
+  // Always fetch user-scope stats for the "Scams Detected" box
+  useEffect(() => {
+    async function fetchUserScams() {
+      try {
+        const params = new URLSearchParams({ scope: "user", days: String(fetchDays) });
+        if (userId && userId !== "Guest") params.set("userId", userId);
+        else if (anonId) params.set("anonId", anonId);
+        const res = await fetch(`/api/stats?${params}`);
+        if (!res.ok) return;
+        const json = (await res.json()) as StatsResponse;
+        const total = (json.stats ?? []).reduce((sum, d) => sum + d.totalEvents, 0);
+        setUserScamsTotal(total);
+      } catch {
+        // keep previous value
+      }
+    }
+    fetchUserScams();
+  }, [fetchDays, userId, anonId]);
+
   const chartData = useMemo(() => {
     if (!data) return [];
     const realSeries = data.realSeries ?? data.stats ?? [];
@@ -183,29 +189,16 @@ export default function DashboardPage() {
     const useSimulated = Boolean(data.simulatedUsed) && debugSeries.length > 0;
     const series = useSimulated ? debugSeries : realSeries;
     if (!series.length) return [];
+
+    // For user scope, only show days that have data (dynamic based on sites visited)
+    if (data.scope === "user") {
+      const aggregated = aggregateByGranularity(series, xAxisGranularity);
+      return aggregated.filter((d) => d.scams > 0);
+    }
+
     return aggregateByGranularity(series, xAxisGranularity);
   }, [data, xAxisGranularity]);
 
-  useEffect(() => {
-    if (scope !== "user") return;
-
-    // Build query params for visited endpoint
-    const params = new URLSearchParams({ limit: "50" });
-    if (userId && userId !== "Guest") {
-      params.set("userId", userId);
-    } else if (anonId) {
-      params.set("anonId", anonId);
-    } else {
-      return; // No user identifier available
-    }
-
-    fetch(`/api/visited?${params}`)
-      .then((res) => res.json())
-      .then((json) => {
-        setVisited(json.entries ?? []);
-      })
-      .catch(() => setVisited([]));
-  }, [scope, userId, anonId]);
 
   return (
     <div className="min-h-screen text-[#424874] p-6 flex flex-col" style={{ background: "var(--bg)" }}>
@@ -270,145 +263,148 @@ export default function DashboardPage() {
         )}
 
         {!loading && data && (
-          <section
-            className="rounded-3xl p-8 border-2 border-[#F3CDEE]"
-            style={{ background: "var(--surface)", boxShadow: "0 8px 32px rgba(243, 205, 238, 0.25)" }}
-          >
-            <div className="h-[400px] w-full">
-              {chartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <ScatterChart
-                    data={chartData}
-                    margin={{ top: 8, right: 8, left: 56, bottom: 24 }}
-                  >
-                    <CartesianGrid strokeDasharray="4 4" stroke="#F3CDEE" vertical={false} />
-                    <XAxis
-                      dataKey="display"
-                      stroke="#7b7fa3"
-                      fontSize={13}
-                      tickLine={false}
-                      axisLine={{ stroke: "#F3CDEE", strokeWidth: 2 }}
-                    />
-                    <YAxis
-                      dataKey="scams"
-                      stroke="#7b7fa3"
-                      fontSize={13}
-                      tickLine={false}
-                      axisLine={false}
-                      label={{
-                        value: "Scams detected",
-                        angle: -90,
-                        position: "insideLeft",
-                        dx: -24,
-                        style: { fill: "#7b7fa3", fontSize: 13, fontFamily: "Nunito, sans-serif" },
-                      }}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        background: "#fff",
-                        border: "2px solid #F3CDEE",
-                        borderRadius: 16,
-                        boxShadow: "0 8px 24px rgba(66, 72, 116, 0.12)",
-                        fontFamily: "Nunito, sans-serif",
-                      }}
-                      labelStyle={{ color: "#424874", fontWeight: 700 }}
-                      formatter={(value: number) => [value.toLocaleString(), "Scams detected"]}
-                      labelFormatter={(_, payload) => payload[0]?.payload?.display ?? ""}
-                    />
-                    <Scatter
-                      dataKey="scams"
-                      fill={LINE_COLOR}
-                      shape="circle"
-                    />
-                  </ScatterChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full flex items-center justify-center text-[#7b7fa3] text-base font-medium border-2 border-dashed border-[#F3CDEE] rounded-2xl bg-white/50">
-                  No scam data in this period. Data will appear as the extension detects scams.
+          <>
+            {/* Chart */}
+            <section
+              className="rounded-3xl p-8 border-2 border-[#F3CDEE]"
+              style={{ background: "var(--surface)", boxShadow: "0 8px 32px rgba(243, 205, 238, 0.25)" }}
+            >
+              <div className="h-[400px] w-full">
+                {chartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={chartData}
+                      margin={{ top: 8, right: 8, left: 56, bottom: 24 }}
+                    >
+                      <CartesianGrid strokeDasharray="4 4" stroke="#F3CDEE" vertical={false} />
+                      <XAxis
+                        dataKey="display"
+                        stroke="#7b7fa3"
+                        fontSize={13}
+                        tickLine={false}
+                        axisLine={{ stroke: "#F3CDEE", strokeWidth: 2 }}
+                      />
+                      <YAxis
+                        stroke="#7b7fa3"
+                        fontSize={13}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
+                        label={{
+                          value: "Scams detected",
+                          angle: -90,
+                          position: "insideLeft",
+                          dx: -24,
+                          style: { fill: "#7b7fa3", fontSize: 13, fontFamily: "Nunito, sans-serif" },
+                        }}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          background: "#fff",
+                          border: "2px solid #F3CDEE",
+                          borderRadius: 16,
+                          boxShadow: "0 8px 24px rgba(66, 72, 116, 0.12)",
+                          fontFamily: "Nunito, sans-serif",
+                        }}
+                        labelStyle={{ color: "#424874", fontWeight: 700 }}
+                        formatter={(value: number) => [value.toLocaleString(), "Scams detected"]}
+                        labelFormatter={(_, payload) => payload[0]?.payload?.display ?? ""}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="scams"
+                        stroke={LINE_COLOR}
+                        strokeWidth={2.5}
+                        dot={{ fill: LINE_COLOR, r: 4, strokeWidth: 0 }}
+                        activeDot={{ fill: LINE_COLOR, r: 6, strokeWidth: 2, stroke: "#fff" }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-[#7b7fa3] text-base font-medium border-2 border-dashed border-[#F3CDEE] rounded-2xl bg-white/50">
+                    No scam data in this period. Data will appear as the extension detects scams.
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* Scams detected + Money saved boxes */}
+            <div className="grid grid-cols-2 gap-6 mt-6">
+              <section
+                className="rounded-3xl p-8 border-2 border-[#F3CDEE] text-center"
+                style={{ background: "var(--surface)", boxShadow: "0 4px 18px rgba(243, 205, 238, 0.2)" }}
+              >
+                <p className="text-sm font-bold text-[#7b7fa3] uppercase tracking-wider mb-2">Scams Detected</p>
+                <p className="text-5xl font-bold text-[#424874]">{userScamsTotal.toLocaleString()}</p>
+              </section>
+              <section
+                className="rounded-3xl p-8 border-2 border-[#F3CDEE] text-center"
+                style={{ background: "var(--surface)", boxShadow: "0 4px 18px rgba(243, 205, 238, 0.2)" }}
+              >
+                <p className="text-sm font-bold text-[#7b7fa3] uppercase tracking-wider mb-2">Money Saved</p>
+                <p className="text-5xl font-bold text-[#7ba892]">$1.4k</p>
+              </section>
+            </div>
+
+            {/* Risky + Safe domains */}
+            <section
+              className="rounded-3xl p-6 border-2 border-[#F3CDEE] mt-6"
+              style={{ background: "var(--surface)", boxShadow: "0 4px 18px rgba(243, 205, 238, 0.2)" }}
+            >
+              <div className="grid md:grid-cols-2 gap-6">
+                <div>
+                  <h3 className="text-base font-bold text-[#424874] mb-3">Risky domains</h3>
+                  {(data.riskyDomains ?? []).length === 0 ? (
+                    <div className="text-sm text-[#7b7fa3] font-medium">No risky domains yet.</div>
+                  ) : (
+                    <div className="space-y-2 text-sm max-h-[220px] overflow-y-auto pr-1">
+                      {(data.riskyDomains ?? []).map((entry) => (
+                        <div
+                          key={`risky-${entry.domain}`}
+                          className="flex items-center justify-between border-b border-[#F3CDEE]/40 pb-2"
+                        >
+                          <a
+                            href={`https://${entry.domain}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-semibold text-[#424874] truncate hover:underline hover:text-[#353b62]"
+                          >
+                            {entry.domain}
+                          </a>
+                          <div className="text-[#7b7fa3] shrink-0 ml-2">Risk: {entry.riskScore}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          </section>
-        )}
-
-        {!loading && data && (
-          <section
-            className="rounded-3xl p-6 border-2 border-[#F3CDEE] mt-6"
-            style={{ background: "var(--surface)", boxShadow: "0 4px 18px rgba(243, 205, 238, 0.2)" }}
-          >
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="text-base font-bold text-[#424874] mb-3">Risky domains</h3>
-                {(data.riskyDomains ?? []).length === 0 ? (
-                  <div className="text-sm text-[#7b7fa3] font-medium">No risky domains yet.</div>
-                ) : (
-                  <div className="space-y-2 text-sm">
-                    {(data.riskyDomains ?? []).map((entry) => (
-                      <div
-                        key={`risky-${entry.domain}`}
-                        className="flex items-center justify-between border-b border-[#F3CDEE]/40 pb-2"
-                      >
-                        <div className="font-semibold text-[#424874] truncate">{entry.domain}</div>
-                        <div className="text-[#7b7fa3]">Risk: {entry.riskScore}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-[#424874] mb-3">Safe domains</h3>
-                {(data.safeDomains ?? []).length === 0 ? (
-                  <div className="text-sm text-[#7b7fa3] font-medium">No safe domains yet.</div>
-                ) : (
-                  <div className="space-y-2 text-sm">
-                    {(data.safeDomains ?? []).map((entry) => (
-                      <div
-                        key={`safe-${entry.domain}`}
-                        className="flex items-center justify-between border-b border-[#F3CDEE]/40 pb-2"
-                      >
-                        <div className="font-semibold text-[#424874] truncate">{entry.domain}</div>
-                        <div className="text-[#7b7fa3]">Risk: {entry.riskScore}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </section>
-        )}
-
-        {!loading && scope === "user" && (
-          <section
-            className="rounded-3xl p-6 border-2 border-[#F3CDEE] mt-6"
-            style={{ background: "var(--surface)", boxShadow: "0 4px 18px rgba(243, 205, 238, 0.2)" }}
-          >
-            <h3 className="text-base font-bold text-[#424874] mb-3">Live visited pages</h3>
-            {visited.length === 0 ? (
-              <div className="text-sm text-[#7b7fa3] font-medium">No pages recorded yet.</div>
-            ) : (
-              <div className="space-y-2 text-sm">
-                {visited.map((entry, idx) => (
-                  <div
-                    key={`${entry.urlHash}-${idx}`}
-                    className="flex items-center justify-between border-b border-[#F3CDEE]/40 pb-2"
-                  >
-                    <div className="min-w-0">
-                      <div className="font-semibold text-[#424874] truncate">
-                        {entry.domain}
-                      </div>
-                      <div className="text-[#7b7fa3] truncate">
-                        {entry.normalizedUrl ?? entry.urlHash}
-                      </div>
+                <div>
+                  <h3 className="text-base font-bold text-[#424874] mb-3">Safe domains</h3>
+                  {(data.safeDomains ?? []).length === 0 ? (
+                    <div className="text-sm text-[#7b7fa3] font-medium">No safe domains yet.</div>
+                  ) : (
+                    <div className="space-y-2 text-sm max-h-[220px] overflow-y-auto pr-1">
+                      {(data.safeDomains ?? []).map((entry) => (
+                        <div
+                          key={`safe-${entry.domain}`}
+                          className="flex items-center justify-between border-b border-[#F3CDEE]/40 pb-2"
+                        >
+                          <a
+                            href={`https://${entry.domain}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-semibold text-[#424874] truncate hover:underline hover:text-[#353b62]"
+                          >
+                            {entry.domain}
+                          </a>
+                          <div className="text-[#7b7fa3] shrink-0 ml-2">Risk: {entry.riskScore}</div>
+                        </div>
+                      ))}
                     </div>
-                    <div className="text-right text-[#7b7fa3]">
-                      <div>Risk: {entry.riskScore ?? "-"}</div>
-                      <div>Conf: {entry.confidence ?? "-"}</div>
-                    </div>
-                  </div>
-                ))}
+                  )}
+                </div>
               </div>
-            )}
-          </section>
+            </section>
+          </>
         )}
 
         {!loading && !data && (
