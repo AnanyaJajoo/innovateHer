@@ -227,66 +227,77 @@
 
     if (!isAmazonTemuOrWalmart || suggestionsFetched) {
       // Not supported or already fetched — skip product suggestions
+      suggestionsSection.style.display = 'none';
       suggestionsLoading.style.display = 'none';
+      suggestionsError.style.display = 'none';
     }
 
-    isAmazonTemuOrWalmart && !suggestionsFetched && (suggestionsFetched = true) && chrome.runtime.sendMessage(
-      { type: 'GET_PRODUCT_SUGGESTIONS', url: window.location.href },
-      function (response) {
-        if (chrome.runtime.lastError) {
-          return;
+    if (isAmazonTemuOrWalmart && !suggestionsFetched) {
+      suggestionsFetched = true;
+      suggestionsSection.style.display = 'block';
+      suggestionsLoading.style.display = 'block';
+      suggestionsError.style.display = 'none';
+      suggestionsList.innerHTML = '';
+
+      chrome.runtime.sendMessage(
+        { type: 'GET_PRODUCT_SUGGESTIONS', url: window.location.href },
+        function (response) {
+          if (chrome.runtime.lastError) {
+            suggestionsLoading.style.display = 'none';
+            suggestionsError.textContent = 'Backend unreachable';
+            suggestionsError.style.display = 'block';
+            return;
+          }
+
+          suggestionsLoading.style.display = 'none';
+
+          if (response && response.error) {
+            suggestionsError.textContent = response.error;
+            suggestionsError.style.display = 'block';
+            return;
+          }
+
+          if (response && response.productName) {
+            console.log('[InnovateHer] Product name found:', response.productName);
+          } else {
+            console.log('[InnovateHer] No product name found for this page');
+          }
+
+          if (response && response.suggestions && response.suggestions.length > 0) {
+            suggestionsList.innerHTML = '';
+
+            response.suggestions.forEach(function (item) {
+              var li = document.createElement('li');
+              li.className = 'suggestion-item';
+
+              var a = document.createElement('a');
+              a.className = 'suggestion-name';
+              a.href = item.searchUrl || item.amazonSearchUrl;
+              a.target = '_blank';
+              a.rel = 'noopener noreferrer';
+              a.textContent = item.name;
+              li.appendChild(a);
+
+              if (item.description) {
+                var desc = document.createElement('div');
+                desc.className = 'suggestion-desc';
+                desc.textContent = item.description;
+                li.appendChild(desc);
+              }
+
+              if (item.estimatedPriceRange) {
+                var price = document.createElement('div');
+                price.className = 'suggestion-price';
+                price.textContent = item.estimatedPriceRange;
+                li.appendChild(price);
+              }
+
+              suggestionsList.appendChild(li);
+            });
+          }
         }
-
-        suggestionsLoading.style.display = 'none';
-
-        if (response && response.error) {
-          suggestionsSection.style.display = 'block';
-          suggestionsError.textContent = response.error;
-          suggestionsError.style.display = 'block';
-          return;
-        }
-
-        if (response && response.productName) {
-          console.log('[InnovateHer] Product name found:', response.productName);
-        } else {
-          console.log('[InnovateHer] No product name found for this page');
-        }
-
-        if (response && response.suggestions && response.suggestions.length > 0) {
-          suggestionsSection.style.display = 'block';
-          suggestionsList.innerHTML = '';
-
-          response.suggestions.forEach(function (item) {
-            var li = document.createElement('li');
-            li.className = 'suggestion-item';
-
-            var a = document.createElement('a');
-            a.className = 'suggestion-name';
-            a.href = item.searchUrl || item.amazonSearchUrl;
-            a.target = '_blank';
-            a.rel = 'noopener noreferrer';
-            a.textContent = item.name;
-            li.appendChild(a);
-
-            if (item.description) {
-              var desc = document.createElement('div');
-              desc.className = 'suggestion-desc';
-              desc.textContent = item.description;
-              li.appendChild(desc);
-            }
-
-            if (item.estimatedPriceRange) {
-              var price = document.createElement('div');
-              price.className = 'suggestion-price';
-              price.textContent = item.estimatedPriceRange;
-              li.appendChild(price);
-            }
-
-            suggestionsList.appendChild(li);
-          });
-        }
-      }
-    );
+      );
+    }
   }
 
   function ensurePopup() {
