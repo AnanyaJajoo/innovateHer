@@ -18,12 +18,13 @@ const siteRiskCacheSchema = new Schema<SiteRiskCacheDocument>(
     reasons: { type: [Schema.Types.Mixed], required: true },
     checkedAt: { type: Date, required: true }
   },
-  { versionKey: false }
+  { versionKey: false, collection: "siteriskcaches" }
 );
 
 siteRiskCacheSchema.index({ urlHash: 1, domain: 1 }, { unique: true });
 
 export const SiteRiskCache = mongoose.model<SiteRiskCacheDocument>(
   "SiteRiskCache",
-  siteRiskCacheSchema
+  siteRiskCacheSchema,
+  "siteriskcaches"
 );

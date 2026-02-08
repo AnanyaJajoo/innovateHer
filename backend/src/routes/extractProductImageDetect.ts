@@ -5,6 +5,9 @@ import path from "node:path";
 import { fetch } from "undici";
 import { extractProductImage } from "../services/productImageExtractor";
 import { pollForResult, uploadForDetection } from "../services/realityDefender";
+import { persistScanResult } from "../services/scanPersistence";
+import { normalizeUrl } from "../utils/normalizeUrl";
+import { hashUrl } from "../utils/hash";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 10000;
@@ -67,8 +70,28 @@ extractProductImageDetectRouter.post(
       return res.status(400).json({ error: "Invalid URL" });
     }
 
+    const parsed = normalizeUrl(url);
+    const urlHash = hashUrl(parsed.normalizedUrl);
+    const userId = typeof req.body?.userId === "string" ? req.body.userId : undefined;
+    const anonId = typeof req.body?.anonId === "string" ? req.body.anonId : undefined;
+
     const imageResult = await extractProductImage(url);
     if (!imageResult.imageUrl) {
+      // We intentionally ignore all third-party console warnings/errors from visited pages.
+      // Only explicit scan inputs are stored.
+      persistScanResult({
+        userId,
+        anonId,
+        domain: parsed.domain,
+        normalizedUrl: parsed.normalizedUrl,
+        urlHash,
+        riskScore: 0,
+        confidence: 0.2,
+        reasons: ["image_not_found"],
+        detectionSignals: ["image_extraction"],
+        checkedAt: new Date()
+      }).catch(console.error);
+
       return res.json({
         image: imageResult,
         detection: null
@@ -90,6 +113,19 @@ extractProductImageDetectRouter.post(
       });
 
       if (!sdkResult) {
+        persistScanResult({
+          userId,
+          anonId,
+          domain: parsed.domain,
+          normalizedUrl: parsed.normalizedUrl,
+          urlHash,
+          riskScore: 0,
+          confidence: 0.2,
+          reasons: ["ai_image_pending"],
+          detectionSignals: ["image_extraction", "ai_image_detect"],
+          checkedAt: new Date()
+        }).catch(console.error);
+
         return res.json({ image: imageResult, detection: { requestId, status: "PENDING" } });
       }
 
@@ -120,6 +156,25 @@ extractProductImageDetectRouter.post(
           sdkResult.message ??
           "Unable to evaluate image";
       }
+
+      const riskScore = typeof payload.finalScore === "number" ? payload.finalScore : 0;
+      const reasons = payload.reasons ?? [];
+      if (payload.error) {
+        reasons.push(payload.error);
+      }
+
+      persistScanResult({
+        userId,
+        anonId,
+        domain: parsed.domain,
+        normalizedUrl: parsed.normalizedUrl,
+        urlHash,
+        riskScore,
+        confidence: typeof payload.finalScore === "number" ? payload.finalScore / 100 : 0.2,
+        reasons: reasons.length ? reasons : ["ai_image_detect"],
+        detectionSignals: ["image_extraction", "ai_image_detect"],
+        checkedAt: new Date()
+      }).catch(console.error);
 
       return res.json({
         image: imageResult,

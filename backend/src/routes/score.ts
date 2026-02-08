@@ -1,38 +1,53 @@
 import { Router } from "express";
 import { isDbReady } from "../db";
+import { scoreUrl } from "../services/scoreEngine";
 import { ScanEvent } from "../models/ScanEvent";
 import { Scan } from "../models/Scan";
 import { persistScanResult } from "../services/scanPersistence";
-import { scoreUrl } from "../services/scoreEngine";
 import { upsertScamIntel } from "../services/scamIntel";
 
-export const siteRiskRouter = Router();
+export const scoreRouter = Router();
 
-siteRiskRouter.post("/site-risk", async (req, res) => {
+scoreRouter.post("/score", async (req, res) => {
   const {
     url,
-    forceRefresh = false
+    domain,
+    title,
+    price,
+    sellerText,
+    reviewSnippets,
+    checkoutText,
+    imageUrls,
+    forceRefresh
   } = req.body ?? {};
   const userId = typeof req.body?.userId === "string" ? req.body.userId : undefined;
   const anonId = typeof req.body?.anonId === "string" ? req.body.anonId : undefined;
-
-  // We intentionally ignore all third-party console warnings/errors from visited pages.
-  // Only explicit scan inputs are used for risk analysis and storage.
 
   if (!url || typeof url !== "string") {
     return res.status(400).json({ error: "url is required" });
   }
 
+  // We intentionally ignore all third-party console warnings/errors from visited pages.
+  // Only explicit scan inputs are used for risk analysis and storage.
+
   let result;
   try {
     result = await scoreUrl({
       url,
+      domain,
+      title,
+      price,
+      sellerText,
+      reviewSnippets,
+      checkoutText,
+      imageUrls,
       userId,
       anonId,
       forceRefresh: forceRefresh === true || forceRefresh === "true"
     });
-  } catch {
-    return res.status(400).json({ error: "Invalid URL" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Invalid URL";
+    return res.status(400).json({ error: message });
   }
 
   if (isDbReady()) {
@@ -60,11 +75,9 @@ siteRiskRouter.post("/site-risk", async (req, res) => {
     }
 
     return res.json({
-      domain: result.domain,
-      normalizedUrl: result.normalizedUrl,
       riskScore: result.riskScore,
-      reasons: result.reasons,
-      cached: true
+      confidence: result.confidence,
+      reasons: result.reasons
     });
   }
 
@@ -87,16 +100,14 @@ siteRiskRouter.post("/site-risk", async (req, res) => {
   if (isDbReady() && (result.riskScore >= 90 || result.detectionSignals.includes("safe_browsing"))) {
     upsertScamIntel({
       domain: result.domain,
-      source: "site_risk",
+      source: "score",
       evidenceIncrement: 1
     }).catch(console.error);
   }
 
   return res.json({
-    domain: result.domain,
-    normalizedUrl: result.normalizedUrl,
     riskScore: result.riskScore,
-    reasons: result.reasons,
-    cached: false
+    confidence: result.confidence,
+    reasons: result.reasons
   });
 });

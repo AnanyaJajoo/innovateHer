@@ -7,6 +7,10 @@ import {
   pollForResult,
   uploadForDetection
 } from "../services/realityDefender";
+import { SiteRiskCache } from "../models/SiteRiskCache";
+import { hashBufferWithSalt } from "../utils/hash";
+import { HASH_SALT } from "../config/metrics";
+import { persistScanResult } from "../services/scanPersistence";
 
 const MAX_SIZE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_MIME = [
@@ -14,14 +18,15 @@ const ALLOWED_MIME = [
   "image/jpg",
   "image/png",
   "image/gif",
-  "image/webp",
-  "image/avif"
+  "image/webp"
 ];
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_SIZE_BYTES }
 });
+
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 export const aiImageDetectRouter = Router();
 
@@ -33,10 +38,59 @@ aiImageDetectRouter.post(
       return res.status(400).json({ error: "image file is required" });
     }
 
+    // We ignore all third-party console warnings/errors from visited pages.
+    // Only explicit user-uploaded media is analyzed here.
+
     if (!ALLOWED_MIME.includes(req.file.mimetype)) {
       return res.status(400).json({ error: "Unsupported image type" });
     }
 
+    const userId = typeof req.body?.userId === "string" ? req.body.userId : undefined;
+    const anonId = typeof req.body?.anonId === "string" ? req.body.anonId : undefined;
+    const domain = typeof req.body?.domain === "string" ? req.body.domain : undefined;
+    const forceRefresh = req.body?.forceRefresh === true || req.body?.forceRefresh === "true";
+
+    const imageHash = hashBufferWithSalt(req.file.buffer, HASH_SALT);
+
+    // Cache-first: check if we already analyzed this image
+    if (!forceRefresh) {
+      const cached = await SiteRiskCache.findOne({
+        urlHash: imageHash,
+        domain: domain ?? "image"
+      })
+        .lean()
+        .catch((err) => {
+          console.error(err);
+          return null;
+        });
+
+      if (cached) {
+        const ageMs = Date.now() - new Date(cached.checkedAt).getTime();
+        if (ageMs < ONE_DAY_MS) {
+          // Return cached result and update persistence
+          persistScanResult({
+            userId,
+            anonId,
+            domain: domain ?? "image",
+            urlHash: imageHash,
+            riskScore: cached.riskScore,
+            confidence: Math.min(0.95, Math.max(0.2, cached.riskScore / 100)),
+            reasons: cached.reasons,
+            detectionSignals: ["ai_image_detect_cached"],
+            checkedAt: new Date()
+          }).catch(console.error);
+
+          return res.json({
+            status: "COMPLETE",
+            finalScore: cached.riskScore,
+            reasons: cached.reasons,
+            cached: true
+          });
+        }
+      }
+    }
+
+    // Cache miss or stale - run detection
     const originalName = req.file.originalname || "upload";
     const safeName = path.basename(originalName);
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "rd-"));
@@ -81,6 +135,27 @@ aiImageDetectRouter.post(
           sdkResult.error?.message ??
           sdkResult.message ??
           "Unable to evaluate image";
+      }
+
+      // Persist result to all required collections
+      if (typeof finalScore === "number") {
+        const confidence = Math.min(0.95, Math.max(0.2, finalScore / 100));
+        const reasons = payload.reasons ?? [];
+        if (payload.error) {
+          reasons.push(payload.error);
+        }
+
+        persistScanResult({
+          userId,
+          anonId,
+          domain: domain ?? "image",
+          urlHash: imageHash,
+          riskScore: finalScore,
+          confidence,
+          reasons: reasons.length ? reasons : ["ai_image_detect"],
+          detectionSignals: ["ai_image_detect"],
+          checkedAt: new Date()
+        }).catch(console.error);
       }
 
       return res.json(payload);

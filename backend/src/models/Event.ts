@@ -19,7 +19,7 @@ const schema = new Schema<EventDocument>(
     actionTaken: { type: String, enum: ["ignored", "left", "reported", "proceeded"] },
     expiresAt: { type: Date, required: true }
   },
-  { timestamps: { createdAt: true, updatedAt: false }, versionKey: false }
+  { timestamps: { createdAt: true, updatedAt: false }, versionKey: false, collection: "events" }
 );
 
 schema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
