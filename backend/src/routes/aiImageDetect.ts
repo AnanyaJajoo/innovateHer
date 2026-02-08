@@ -7,6 +7,12 @@ import {
   pollForResult,
   uploadForDetection
 } from "../services/realityDefender";
+import { isDbReady } from "../db";
+import { RiskAssessment } from "../models/RiskAssessment";
+import { ScanEvent } from "../models/ScanEvent";
+import { hashBufferWithSalt } from "../utils/hash";
+import { HASH_SALT, RISK_HIGH_THRESHOLD } from "../config/metrics";
+import { upsertScamIntel } from "../services/scamIntel";
 
 const MAX_SIZE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_MIME = [
@@ -14,8 +20,7 @@ const ALLOWED_MIME = [
   "image/jpg",
   "image/png",
   "image/gif",
-  "image/webp",
-  "image/avif"
+  "image/webp"
 ];
 
 const upload = multer({
@@ -33,6 +38,9 @@ aiImageDetectRouter.post(
       return res.status(400).json({ error: "image file is required" });
     }
 
+    // We ignore all third-party console warnings/errors from visited pages.
+    // Only explicit user-uploaded media is analyzed here.
+
     if (!ALLOWED_MIME.includes(req.file.mimetype)) {
       return res.status(400).json({ error: "Unsupported image type" });
     }
@@ -41,6 +49,11 @@ aiImageDetectRouter.post(
     const safeName = path.basename(originalName);
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "rd-"));
     const tmpPath = path.join(tmpDir, safeName);
+
+    const userId = typeof req.body?.userId === "string" ? req.body.userId : undefined;
+    const anonId = typeof req.body?.anonId === "string" ? req.body.anonId : undefined;
+    const domain = typeof req.body?.domain === "string" ? req.body.domain : undefined;
+    const imageHash = hashBufferWithSalt(req.file.buffer, HASH_SALT);
 
     await fs.writeFile(tmpPath, req.file.buffer);
 
@@ -81,6 +94,36 @@ aiImageDetectRouter.post(
           sdkResult.error?.message ??
           sdkResult.message ??
           "Unable to evaluate image";
+      }
+
+      if (isDbReady() && typeof finalScore === "number") {
+        const confidence = Math.min(0.95, Math.max(0.2, finalScore / 100));
+
+        RiskAssessment.create({
+          userId,
+          anonId,
+          domain,
+          riskScore: finalScore,
+          confidence,
+          detectionSignals: ["ai_image_detect"]
+        }).catch(console.error);
+
+        ScanEvent.create({
+          userId,
+          anonId,
+          domain: domain ?? "unknown",
+          urlHash: imageHash,
+          timestamp: new Date()
+        }).catch(console.error);
+
+        if (finalScore >= RISK_HIGH_THRESHOLD) {
+          upsertScamIntel({
+            domain,
+            repeatedImageHashes: [imageHash],
+            source: "ai_image",
+            evidenceIncrement: 1
+          }).catch(console.error);
+        }
       }
 
       return res.json(payload);

@@ -25,10 +25,19 @@ Click the extension icon in the toolbar to open the popup.
 
 ## Metrics dashboard
 
-- **Extension**: Click **Open Dashboard** in the popup to open the dashboard in a new tab (default: `http://localhost:3000`).
+- **Extension**: Click **Open Dashboard** in the popup to open the dashboard in a new tab (default: `http://127.0.0.1:3000`).
 - **Dashboard**: Next.js app with Recharts — daily events, actions (ignored/left/reported), risk score bins, global vs my stats. User id from `localStorage` for “My stats”.
-- **Event log** (for when extension sends data): `{ timestamp, domain, riskScore, category, price?, actionTaken }`. POST to `/api/events`. Privacy: store hashed URL paths; keep only domain + score bins.
-- **Run dashboard**: `cd dashboard && npm run dev`, then open http://localhost:3000.
+- **Backend stats**: `/api/stats` is proxied to the backend and reads MongoDB (`scans`, `events`, `riskassessments`, `siteriskcaches`).
+- **Live visited pages**: `/api/visited` shows the last 50 pages for the current user from `scanevents` (enriched by `riskassessments` and `siteriskcaches`).
+- **Run dashboard**: `cd dashboard && npm run dev`, then open http://127.0.0.1:3000.
+
+## Dev debug series
+
+In development, the backend `/api/stats` response includes:
+- `realSeries` (from MongoDB)
+- `debugSeries` (synthetic 2000+ points) when real data is sparse or `?debugSeed=1` is set
+
+Disable debug series by using `NODE_ENV=production` or by ensuring real data spans at least 10 active days.
 
 ## Product image extraction API
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDailyUserStats, getGlobalStats } from "@/lib/storage";
+
+const BACKEND_URL = process.env.BACKEND_URL ?? "http://127.0.0.1:4000";
 
 // GET: aggregated stats for dashboard
 // Query: userId (optional), days (default 7), scope=user|global
@@ -8,15 +9,28 @@ export async function GET(request: NextRequest) {
   const scope = searchParams.get("scope") ?? "global";
   const days = Math.min(365, Math.max(1, parseInt(searchParams.get("days") ?? "7", 10) || 7));
   const userId = searchParams.get("userId") ?? "default";
+  const debugSeed = searchParams.get("debugSeed");
 
   try {
-    if (scope === "user") {
-      const stats = getDailyUserStats(userId, days);
-      return NextResponse.json({ scope: "user", userId, days, stats });
+    const params = new URLSearchParams({ scope, days: String(days), userId });
+    if (debugSeed) params.set("debugSeed", debugSeed);
+    const res = await fetch(`${BACKEND_URL}/api/stats?${params.toString()}`, {
+      cache: "no-store"
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.error(
+        `Stats proxy error: backend responded ${res.status} for scope=${scope} days=${days}`
+      );
     }
-    const stats = getGlobalStats(days);
-    return NextResponse.json({ scope: "global", days, stats });
+    return NextResponse.json(data, { status: res.status });
   } catch (e) {
-    return NextResponse.json({ error: "Failed to aggregate stats" }, { status: 500 });
+    console.error(
+      `Stats proxy error: backend unreachable at ${BACKEND_URL} (${e instanceof Error ? e.message : "unknown error"})`
+    );
+    return NextResponse.json(
+      { error: "Backend unreachable", backendUrl: BACKEND_URL },
+      { status: 502 }
+    );
   }
 }

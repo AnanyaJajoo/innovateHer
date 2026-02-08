@@ -27,6 +27,9 @@ interface StatsResponse {
   scope: string;
   days: number;
   stats: DailyStat[];
+  realSeries?: DailyStat[];
+  debugSeries?: DailyStat[];
+  debugUsed?: boolean;
   userId?: string;
 }
 
@@ -34,7 +37,7 @@ const LINE_COLOR = "#424874";
 const AREA_FILL = "rgba(243, 205, 238, 0.4)";
 
 function formatDateLabel(dateStr: string, granularity: XAxisGranularity): string {
-  const d = new Date(dateStr + "T12:00:00");
+  const d = dateStr.includes("T") ? new Date(dateStr) : new Date(dateStr + "T12:00:00");
   if (granularity === "days") {
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   }
@@ -52,7 +55,7 @@ function aggregateByGranularity(
 
   const bucket = new Map<string, number>();
   for (const s of stats) {
-    const d = new Date(s.date + "T12:00:00");
+    const d = s.date.includes("T") ? new Date(s.date) : new Date(s.date + "T12:00:00");
     let key: string;
     if (granularity === "days") {
       key = s.date;
@@ -85,6 +88,16 @@ export default function DashboardPage() {
   const [data, setData] = useState<StatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string>("Guest");
+  const [visited, setVisited] = useState<
+    Array<{
+      domain: string;
+      normalizedUrl?: string;
+      urlHash: string;
+      riskScore?: number;
+      confidence?: number;
+      timestamp: string;
+    }>
+  >([]);
 
   useEffect(() => {
     setUserId(localStorage.getItem("userId") ?? "Guest");
@@ -120,9 +133,26 @@ export default function DashboardPage() {
   }, [fetchStats]);
 
   const chartData = useMemo(() => {
-    if (!data?.stats?.length) return [];
-    return aggregateByGranularity(data.stats, xAxisGranularity);
-  }, [data?.stats, xAxisGranularity]);
+    if (!data) return [];
+    const realSeries = data.realSeries ?? data.stats ?? [];
+    const debugSeries = data.debugSeries ?? [];
+    const isDev = process.env.NODE_ENV !== "production";
+    const useDebug = isDev && (data.debugUsed || realSeries.length < 10) && debugSeries.length;
+    const series = useDebug ? debugSeries : realSeries;
+    if (!series.length) return [];
+    return aggregateByGranularity(series, xAxisGranularity);
+  }, [data, xAxisGranularity]);
+
+  useEffect(() => {
+    if (scope !== "user") return;
+    const currentUser = userId === "Guest" ? "default" : userId;
+    fetch(`/api/visited?userId=${encodeURIComponent(currentUser)}&limit=50`)
+      .then((res) => res.json())
+      .then((json) => {
+        setVisited(json.entries ?? []);
+      })
+      .catch(() => setVisited([]));
+  }, [scope, userId]);
 
   return (
     <div className="min-h-screen text-[#424874] p-6 flex flex-col" style={{ background: "var(--bg)" }}>
@@ -266,6 +296,40 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
+          </section>
+        )}
+
+        {!loading && scope === "user" && (
+          <section
+            className="rounded-3xl p-6 border-2 border-[#F3CDEE] mt-6"
+            style={{ background: "var(--surface)", boxShadow: "0 4px 18px rgba(243, 205, 238, 0.2)" }}
+          >
+            <h3 className="text-base font-bold text-[#424874] mb-3">Live visited pages</h3>
+            {visited.length === 0 ? (
+              <div className="text-sm text-[#7b7fa3] font-medium">No pages recorded yet.</div>
+            ) : (
+              <div className="space-y-2 text-sm">
+                {visited.map((entry, idx) => (
+                  <div
+                    key={`${entry.urlHash}-${idx}`}
+                    className="flex items-center justify-between border-b border-[#F3CDEE]/40 pb-2"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-semibold text-[#424874] truncate">
+                        {entry.domain}
+                      </div>
+                      <div className="text-[#7b7fa3] truncate">
+                        {entry.normalizedUrl ?? entry.urlHash}
+                      </div>
+                    </div>
+                    <div className="text-right text-[#7b7fa3]">
+                      <div>Risk: {entry.riskScore ?? "-"}</div>
+                      <div>Conf: {entry.confidence ?? "-"}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
         )}
 
