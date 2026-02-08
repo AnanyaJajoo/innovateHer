@@ -2,6 +2,7 @@ import express from "express";
 import { siteRiskRouter } from "./routes/siteRisk";
 import { aiImageDetectRouter } from "./routes/aiImageDetect";
 import { extractProductImageRouter } from "./routes/extractProductImage";
+import { extractProductImageDetectRouter } from "./routes/extractProductImageDetect";
 import { productSuggestionsRouter } from "./routes/productSuggestions";
 
 export const createApp = () => {
@@ -16,6 +17,7 @@ export const createApp = () => {
   app.use("/api", siteRiskRouter);
   app.use("/api", aiImageDetectRouter);
   app.use("/api", extractProductImageRouter);
+  app.use("/api", extractProductImageDetectRouter);
   app.use("/api", productSuggestionsRouter);
 
   return app;
