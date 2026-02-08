@@ -99,6 +99,7 @@ export default function DashboardPage() {
   const [userScamsTotal, setUserScamsTotal] = useState(0);
   const [userId, setUserId] = useState<string>("Guest");
   const [displayName, setDisplayName] = useState<string | null>(null);
+  const [anonId, setAnonId] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -131,6 +132,8 @@ export default function DashboardPage() {
       setUserId(localUserId);
       if (localDisplayName) setDisplayName(localDisplayName);
     }
+    const storedAnonId = localStorage.getItem("anonUserId");
+    if (storedAnonId) setAnonId(storedAnonId);
   }, []);
 
   const fetchDays = useMemo(() => {
