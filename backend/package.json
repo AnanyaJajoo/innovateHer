@@ -4,15 +4,22 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "dev:full": "concurrently \"tsx watch src/server.ts\" \"npm -C ../dashboard run dev\"",
     "build": "tsc",
     "start": "node dist/server.js",
     "test:db": "tsx src/testDb.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:db:cleanup": "tsx src/cleanupDb.ts",
+    "seed:sample": "tsx src/seedSampleData.ts",
+    "test:debug-series": "tsx src/tests/debugSeries.test.ts",
+    "test:visited": "tsx src/tests/visited.test.ts",
+    "test:scam-websites": "tsx src/tests/scamWebsitesVisited.test.ts",
+    "test:stats-series": "tsx src/tests/statsSeries.test.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@realitydefender/realitydefender": "^0.1.16",
-    "cheerio": "^1.0.0-rc.12",
+    "cheerio": "1.0.0-rc.12",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "mongoose": "^8.7.0",
@@ -26,6 +33,7 @@
     "@types/express": "^4.17.21",
     "@types/multer": "^1.4.12",
     "@types/node": "^22.10.2",
+    "concurrently": "^8.2.2",
     "ts-node-dev": "^2.0.0",
     "tsx": "^4.21.0",
     "typescript": "^5.6.3",

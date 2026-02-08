@@ -2,15 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  LineChart,
-  Line,
+  ScatterChart,
+  Scatter,
   XAxis,
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  CartesianGrid,
-  Area,
-  ComposedChart,
+  CartesianGrid
 } from "recharts";
 
 type XAxisGranularity = "days" | "months" | "years";
@@ -21,20 +19,26 @@ interface DailyStat {
   uniqueDomains?: number;
   byAction: Record<string, number>;
   riskScoreBins: { bin: string; count: number }[];
+  cumulativeEvents?: number;
+  cumulativeUniqueDomains?: number;
 }
 
 interface StatsResponse {
   scope: string;
   days: number;
   stats: DailyStat[];
+  realSeries?: DailyStat[];
+  debugSeries?: DailyStat[];
+  simulatedUsed?: boolean;
   userId?: string;
+  safeDomains?: Array<{ domain: string; riskScore: number }>;
+  riskyDomains?: Array<{ domain: string; riskScore: number }>;
 }
 
 const LINE_COLOR = "#424874";
-const AREA_FILL = "rgba(243, 205, 238, 0.4)";
 
 function formatDateLabel(dateStr: string, granularity: XAxisGranularity): string {
-  const d = new Date(dateStr + "T12:00:00");
+  const d = dateStr.includes("T") ? new Date(dateStr) : new Date(dateStr + "T12:00:00");
   if (granularity === "days") {
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   }
@@ -50,28 +54,36 @@ function aggregateByGranularity(
 ): { date: string; display: string; scams: number }[] {
   if (!stats.length) return [];
 
-  const bucket = new Map<string, number>();
-  for (const s of stats) {
-    const d = new Date(s.date + "T12:00:00");
+  const bucket = new Map<string, { date: string; scams: number }>();
+  const sorted = [...stats].sort((a, b) => a.date.localeCompare(b.date));
+  for (const s of sorted) {
+    const d = s.date.includes("T") ? new Date(s.date) : new Date(s.date + "T12:00:00");
     let key: string;
+    let bucketDate: string;
     if (granularity === "days") {
       key = s.date;
+      bucketDate = s.date;
     } else if (granularity === "months") {
       key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      bucketDate = `${key}-01`;
     } else {
       key = String(d.getFullYear());
+      bucketDate = `${key}-01-01`;
     }
-    bucket.set(key, (bucket.get(key) ?? 0) + s.totalEvents);
+    const value = s.totalEvents;
+    const existing = bucket.get(key);
+    if (existing) {
+      existing.scams += value;
+    } else {
+      bucket.set(key, { date: bucketDate, scams: value });
+    }
   }
 
   const entries = Array.from(bucket.entries())
-    .map(([date, scams]) => ({
-      date,
-      display: formatDateLabel(
-        granularity === "days" ? date : date + (granularity === "months" ? "-01" : "-01-01"),
-        granularity
-      ),
-      scams,
+    .map(([key, entry]) => ({
+      date: key,
+      display: formatDateLabel(entry.date, granularity),
+      scams: entry.scams,
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
@@ -85,9 +97,31 @@ export default function DashboardPage() {
   const [data, setData] = useState<StatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string>("Guest");
+  const [anonId, setAnonId] = useState<string>("");
+  const [visited, setVisited] = useState<
+    Array<{
+      domain: string;
+      normalizedUrl?: string;
+      urlHash: string;
+      riskScore?: number;
+      confidence?: number;
+      timestamp: string;
+    }>
+  >([]);
 
   useEffect(() => {
-    setUserId(localStorage.getItem("userId") ?? "Guest");
+    const storedUserId = localStorage.getItem("userId");
+    setUserId(storedUserId && storedUserId.trim() ? storedUserId : "default");
+
+    // Use the same anonUserId that the extension uses, or generate one
+    let storedAnonId = localStorage.getItem("anonUserId");
+    if (!storedAnonId) {
+      // Generate a new anonId if not present (same logic as extension)
+      storedAnonId = crypto?.randomUUID?.() ??
+        `anon-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      localStorage.setItem("anonUserId", storedAnonId);
+    }
+    setAnonId(storedAnonId);
   }, []);
 
   const fetchDays = useMemo(() => {
@@ -102,27 +136,76 @@ export default function DashboardPage() {
       const params = new URLSearchParams({
         scope,
         days: String(fetchDays),
-        userId: userId === "Guest" ? "default" : userId,
       });
+
+      // For user scope, pass anonId (preferred) or userId
+      if (scope === "user") {
+        if (userId && userId !== "Guest") {
+          params.set("userId", userId);
+        } else if (anonId) {
+          params.set("anonId", anonId);
+        }
+      }
+
       const res = await fetch(`/api/stats?${params}`);
-      if (!res.ok) throw new Error("Failed to fetch");
-      const json: StatsResponse = await res.json();
-      setData(json);
+      const json = (await res.json().catch(() => null)) as StatsResponse | null;
+      if (!res.ok) {
+        if (res.status === 400 && json?.error === "missing_user_identifier") {
+          // Ensure anonId exists and retry once
+          let storedAnonId = localStorage.getItem("anonUserId");
+          if (!storedAnonId) {
+            storedAnonId =
+              crypto?.randomUUID?.() ??
+              `anon-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+            localStorage.setItem("anonUserId", storedAnonId);
+          }
+          setAnonId(storedAnonId);
+          return;
+        }
+        throw new Error("Failed to fetch");
+      }
+      if (json) setData(json);
     } catch (e) {
       setData(null);
     } finally {
       setLoading(false);
     }
-  }, [scope, fetchDays, userId]);
+  }, [scope, fetchDays, userId, anonId]);
 
   useEffect(() => {
     fetchStats();
   }, [fetchStats]);
 
   const chartData = useMemo(() => {
-    if (!data?.stats?.length) return [];
-    return aggregateByGranularity(data.stats, xAxisGranularity);
-  }, [data?.stats, xAxisGranularity]);
+    if (!data) return [];
+    const realSeries = data.realSeries ?? data.stats ?? [];
+    const debugSeries = data.debugSeries ?? [];
+    const useSimulated = Boolean(data.simulatedUsed) && debugSeries.length > 0;
+    const series = useSimulated ? debugSeries : realSeries;
+    if (!series.length) return [];
+    return aggregateByGranularity(series, xAxisGranularity);
+  }, [data, xAxisGranularity]);
+
+  useEffect(() => {
+    if (scope !== "user") return;
+
+    // Build query params for visited endpoint
+    const params = new URLSearchParams({ limit: "50" });
+    if (userId && userId !== "Guest") {
+      params.set("userId", userId);
+    } else if (anonId) {
+      params.set("anonId", anonId);
+    } else {
+      return; // No user identifier available
+    }
+
+    fetch(`/api/visited?${params}`)
+      .then((res) => res.json())
+      .then((json) => {
+        setVisited(json.entries ?? []);
+      })
+      .catch(() => setVisited([]));
+  }, [scope, userId, anonId]);
 
   return (
     <div className="min-h-screen text-[#424874] p-6 flex flex-col" style={{ background: "var(--bg)" }}>
@@ -183,7 +266,7 @@ export default function DashboardPage() {
         </div>
 
         {loading && (
-          <div className="text-[#7b7fa3] text-base py-10 font-medium">Loading…</div>
+          <div className="text-[#7b7fa3] text-base py-10 font-medium">Loading...</div>
         )}
 
         {!loading && data && (
@@ -194,21 +277,11 @@ export default function DashboardPage() {
             <div className="h-[400px] w-full">
               {chartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart
+                  <ScatterChart
                     data={chartData}
                     margin={{ top: 8, right: 8, left: 56, bottom: 24 }}
                   >
-                    <defs>
-                      <linearGradient id="scamsGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#F3CDEE" stopOpacity={0.6} />
-                        <stop offset="100%" stopColor="#F3CDEE" stopOpacity={0.05} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid
-                      strokeDasharray="4 4"
-                      stroke="#F3CDEE"
-                      vertical={false}
-                    />
+                    <CartesianGrid strokeDasharray="4 4" stroke="#F3CDEE" vertical={false} />
                     <XAxis
                       dataKey="display"
                       stroke="#7b7fa3"
@@ -240,25 +313,14 @@ export default function DashboardPage() {
                       }}
                       labelStyle={{ color: "#424874", fontWeight: 700 }}
                       formatter={(value: number) => [value.toLocaleString(), "Scams detected"]}
-                      labelFormatter={(_, payload) =>
-                        payload[0]?.payload?.display ?? ""
-                      }
+                      labelFormatter={(_, payload) => payload[0]?.payload?.display ?? ""}
                     />
-                    <Area
-                      type="monotone"
+                    <Scatter
                       dataKey="scams"
-                      fill="url(#scamsGradient)"
-                      stroke="none"
+                      fill={LINE_COLOR}
+                      shape="circle"
                     />
-                    <Line
-                      type="monotone"
-                      dataKey="scams"
-                      stroke={LINE_COLOR}
-                      strokeWidth={3}
-                      dot={false}
-                      activeDot={{ r: 6, fill: "#424874", stroke: "#F3CDEE", strokeWidth: 3 }}
-                    />
-                  </ComposedChart>
+                  </ScatterChart>
                 </ResponsiveContainer>
               ) : (
                 <div className="h-full flex items-center justify-center text-[#7b7fa3] text-base font-medium border-2 border-dashed border-[#F3CDEE] rounded-2xl bg-white/50">
@@ -266,6 +328,86 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
+          </section>
+        )}
+
+        {!loading && data && (
+          <section
+            className="rounded-3xl p-6 border-2 border-[#F3CDEE] mt-6"
+            style={{ background: "var(--surface)", boxShadow: "0 4px 18px rgba(243, 205, 238, 0.2)" }}
+          >
+            <div className="grid md:grid-cols-2 gap-6">
+              <div>
+                <h3 className="text-base font-bold text-[#424874] mb-3">Risky domains</h3>
+                {(data.riskyDomains ?? []).length === 0 ? (
+                  <div className="text-sm text-[#7b7fa3] font-medium">No risky domains yet.</div>
+                ) : (
+                  <div className="space-y-2 text-sm">
+                    {(data.riskyDomains ?? []).map((entry) => (
+                      <div
+                        key={`risky-${entry.domain}`}
+                        className="flex items-center justify-between border-b border-[#F3CDEE]/40 pb-2"
+                      >
+                        <div className="font-semibold text-[#424874] truncate">{entry.domain}</div>
+                        <div className="text-[#7b7fa3]">Risk: {entry.riskScore}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-[#424874] mb-3">Safe domains</h3>
+                {(data.safeDomains ?? []).length === 0 ? (
+                  <div className="text-sm text-[#7b7fa3] font-medium">No safe domains yet.</div>
+                ) : (
+                  <div className="space-y-2 text-sm">
+                    {(data.safeDomains ?? []).map((entry) => (
+                      <div
+                        key={`safe-${entry.domain}`}
+                        className="flex items-center justify-between border-b border-[#F3CDEE]/40 pb-2"
+                      >
+                        <div className="font-semibold text-[#424874] truncate">{entry.domain}</div>
+                        <div className="text-[#7b7fa3]">Risk: {entry.riskScore}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {!loading && scope === "user" && (
+          <section
+            className="rounded-3xl p-6 border-2 border-[#F3CDEE] mt-6"
+            style={{ background: "var(--surface)", boxShadow: "0 4px 18px rgba(243, 205, 238, 0.2)" }}
+          >
+            <h3 className="text-base font-bold text-[#424874] mb-3">Live visited pages</h3>
+            {visited.length === 0 ? (
+              <div className="text-sm text-[#7b7fa3] font-medium">No pages recorded yet.</div>
+            ) : (
+              <div className="space-y-2 text-sm">
+                {visited.map((entry, idx) => (
+                  <div
+                    key={`${entry.urlHash}-${idx}`}
+                    className="flex items-center justify-between border-b border-[#F3CDEE]/40 pb-2"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-semibold text-[#424874] truncate">
+                        {entry.domain}
+                      </div>
+                      <div className="text-[#7b7fa3] truncate">
+                        {entry.normalizedUrl ?? entry.urlHash}
+                      </div>
+                    </div>
+                    <div className="text-right text-[#7b7fa3]">
+                      <div>Risk: {entry.riskScore ?? "-"}</div>
+                      <div>Conf: {entry.confidence ?? "-"}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
         )}
 

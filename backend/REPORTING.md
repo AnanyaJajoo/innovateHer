@@ -4,32 +4,51 @@ This document describes the new community reporting and domain reputation featur
 
 Environment
 - `MONGODB_URI` (required) - connection string for MongoDB
-- `URL_HASH_SALT` (recommended) - server salt used when hashing URLs for scan logs
+- `HASH_SALT` or `URL_HASH_SALT` (recommended) - server salt used when hashing URLs for scan logs
 - `NODE_ENV` - production vs development. In development, endpoints accept `x-dev-user-id` header or `userId` in request body as auth fallback.
+- `RISK_HIGH_THRESHOLD` - high-risk threshold (default 80)
+- `DEFAULT_AVG_ORDER_VALUE` - fallback price for protected dollars (default 75)
+- `PROTECTION_FACTOR_CRITICAL` - risk >= 90 (default 0.8)
+- `PROTECTION_FACTOR_HIGH` - risk 80-89 (default 0.5)
+- `PROTECTION_FACTOR_ELEVATED` - risk 70-79 (default 0.2)
 
-New Models
-- `Report` - community reports (domain, userId, type, category, title, body, status)
+Collections
+- `Report` - community reports (domain, userId, reportType, category, title, body, publishStatus)
 - `GlobalDomainReputation` - aggregated reputation metrics per domain
 - `Scan` - logged scans (stores salted URL hash, domain, score, confidence, reasons)
 - `Event` - optional telemetry with TTL (expiresAt)
+- `ScanEvent` - per scan metrics event (risk tier + protected dollars)
+- `RiskAssessment` - risk score + confidence + signals
+- `FlagEvent` - user flags (reports or reported action)
+- `ScamIntel` - scam indicators repository
 
 New/Updated Endpoints (mounted under `/api`)
-- POST `/api/reports` - create a report. Requires auth in production.
-  - Body: `{ domain, type: "scam" | "bad_experience" | "false_positive", category?, title, body }`
-  - Returns: `{ reportId }`
+- POST `/api/report` - create a report. Requires auth in production.
+  - Body: `{ domain, reportType: "scam" | "bad_experience" | "false_positive", category?, title, body, userId?, anonId?, vendorId?, vendorName? }`
+  - Returns: `{ ok, stored, reportId, reputation }`
 
-- GET `/api/domains/:domain` - fetch domain reputation and recent posts
-  - Returns: `{ domain, reputation: GlobalDomainReputation|null, posts: [...] }`
+- GET `/api/domain-reputation/:domain` - fetch domain reputation
+  - Returns: `{ domain, totalReports, scamReports, falsePositiveReports, aggregateRiskScore, confidence }`
 
-- POST `/api/site-risk` - existing endpoint now integrates community reputation non-breakingly:
-  - Behaviors added: consults cached reputation or recomputes it, may add reason codes `COMMUNITY_REPORTED_SCAM` or `DOMAIN_UNKNOWN`, modestly adjusts `riskScore` and `confidence`, and logs a `Scan` document (does not store raw URL).
-  - Response shape preserved; an optional `communityReputation` field may be added.
+- GET `/api/reports/:domain` - fetch reports for a domain
+  - Returns: `{ reports: [...] }`
 
-- POST `/api/events` - optional telemetry endpoint. Requires auth in production. Stores event with `expiresAt` (30 days) and returns `204`.
+- POST `/api/site-risk` - logs `ScanEvent`, `Scan`, updates `SiteRiskCache`, and writes `RiskAssessment` when analysis ran.
+  - Response shape preserved.
+
+- POST `/api/event` - optional telemetry endpoint. Requires auth in production. Stores event with `expiresAt` (30 days).
+
+- GET `/api/metrics/summary` - global metrics summary
+- GET `/api/metrics/users/:userId/summary` - per-user metrics summary
+- GET `/api/metrics/users/:userId/improvement` - weekly improvement series
+- GET `/api/metrics/top-domains` - top flagged domains
+- GET `/api/metrics/top-vendors` - top flagged vendors
+- GET `/api/stats` - daily stats used by the dashboard
 
 Utilities
 - `normalizeDomain(domainOrUrl)` - trim, lowercase, strip leading `www.`, accepts a full URL too
-- `urlHash(value)` - salted SHA256 hex digest using `URL_HASH_SALT`
+- `urlHash(value)` - SHA256 hex digest
+- `hashWithSalt(value, salt)` - SHA256 hex digest with a server-side salt (used for path hashing)
 
 Testing & Quick Checks
 1. Ensure MongoDB is available and `MONGODB_URI` is set.
@@ -53,15 +72,15 @@ npm run dev
 
 Create a report:
 ```bash
-curl -X POST http://localhost:4000/api/reports \
+curl -X POST http://localhost:4000/api/report \
   -H "Content-Type: application/json" \
   -H "x-dev-user-id: dev123" \
-  -d '{"domain":"example.com","type":"scam","category":"phishing","title":"Phishy login","body":"Collected creds"}'
+  -d '{"domain":"example.com","reportType":"scam","category":"phishing","title":"Phishy login","body":"Collected creds"}'
 ```
 
 Get domain view:
 ```bash
-curl http://localhost:4000/api/domains/example.com
+curl http://localhost:4000/api/domain-reputation/example.com
 ```
 
 Score an URL (existing endpoint):
@@ -73,12 +92,13 @@ curl -X POST http://localhost:4000/api/site-risk \
 
 Post telemetry event:
 ```bash
-curl -X POST http://localhost:4000/api/events \
+curl -X POST http://localhost:4000/api/event \
   -H "Content-Type: application/json" \
   -H "x-dev-user-id: dev123" \
   -d '{"anonId":"anon-1","domain":"example.com","riskScoreBucket":"70-79","actionTaken":"left"}'
 ```
 
 Notes
-- The system never stores raw full URLs in MongoDB. Only salted URL hashes are stored for scan logs.
+- The system never stores raw full URLs in MongoDB. Only hashed URL paths are stored for scan logs.
+- Third-party console warnings/errors are ignored and never stored.
 - Reputation recomputation is safe to call frequently and is invoked asynchronously when reports are created.
