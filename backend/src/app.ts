@@ -3,12 +3,16 @@ import { siteRiskRouter } from "./routes/siteRisk";
 import { aiImageDetectRouter } from "./routes/aiImageDetect";
 import { extractProductImageRouter } from "./routes/extractProductImage";
 import { extractProductImageDetectRouter } from "./routes/extractProductImageDetect";
+<<<<<<< HEAD
 import { eventsRouter } from "./routes/events";
 import { reportsRouter } from "./routes/reports";
 import { metricsRouter } from "./routes/metrics";
 import { statsRouter } from "./routes/stats";
 import { visitedRouter } from "./routes/visited";
 import { scoreRouter } from "./routes/score";
+=======
+import { productSuggestionsRouter } from "./routes/productSuggestions";
+>>>>>>> origin/main
 
 export const createApp = () => {
   const app = express();
@@ -27,12 +31,16 @@ export const createApp = () => {
   app.use("/api", aiImageDetectRouter);
   app.use("/api", extractProductImageRouter);
   app.use("/api", extractProductImageDetectRouter);
+<<<<<<< HEAD
   app.use("/api", scoreRouter);
   app.use("/api", eventsRouter);
   app.use("/api", reportsRouter);
   app.use("/api", metricsRouter);
   app.use("/api", statsRouter);
   app.use("/api", visitedRouter);
+=======
+  app.use("/api", productSuggestionsRouter);
+>>>>>>> origin/main
 
   return app;
 };
