@@ -52,9 +52,16 @@
     </a>
 
     <footer class="footer">
-      <a href="#" class="link" id="link-settings">Settings</a>
-      <span class="divider">·</span>
-      <a href="#" class="link" id="link-help">Help</a>
+      <section class="user-section" id="user-section">
+        <div class="user-info" id="user-info" hidden>
+          <span class="user-name" id="user-name"></span>
+          <span class="user-email" id="user-email"></span>
+        </div>
+        <button type="button" class="btn-signin" id="btn-signin" hidden>Sign in with Google</button>
+        <a href="#" class="link" id="link-settings">Settings</a>
+        <span class="divider">·</span>
+        <a href="#" class="link" id="link-help">Help</a>
+      </section>
     </footer>
   </div>
   <script src="popup.js"></script>

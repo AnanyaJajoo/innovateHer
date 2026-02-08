@@ -2,19 +2,32 @@
   "manifest_version": 3,
   "name": "Illume",
   "version": "1.0.1",
+  "key": "jeoialginpodfibbiakpMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAs87mmqp6Z17r3NkhJZei56vEOPJqp6zBlzqnJ4Yp5e3+OK6Sl1P12VmD1CPuWOmLrxG7tQ5T4j/eTtRlGRbxQQT/wAfbzZHojVmxm/v5G/Ept2qK7e1EtH90mrBMJj+CB0FfkQ0Nj1I0MiHgmafsdEBd49oh82kpMtOsjV5V22CT940Rze8C0m9ny+u2/nqLg4SA6+1bhk0NJWYx4sLvTvk5TM0f1R/OPydWwBY79TCDw8ij3wOwmh0DJC0ArAs3l9nQh0l4zIXNeJRkfcPCoBGko/msXJ8ZwVvxfad8/v+tbiaaRpKMvxuekLf6aWBF/mycs+RNkXg44196OdTPbwIDAQABjcjnbkdlbhjm",
   "description": "Detect if images on the current page are AI-generated",
   "icons": {
     "16": "icon.png",
     "48": "icon.png",
     "128": "icon.png"
   },
+  "permissions": [
+    "activeTab",
+    "identity",
+    "storage"
+  ],
+  "oauth2": {
+    "client_id": "902516730227-m0atjinp6hf4j61tg6q1jd47hp3f2gf9.apps.googleusercontent.com",
+    "scopes": ["email", "profile", "openid"]
+  },
+  "host_permissions": [
+    "<all_urls>",
+    "http://localhost:4000/*",
+    "https://www.googleapis.com/*"
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_title": "Illume",
     "default_icon": "icon.png"
   },
-  "permissions": ["activeTab"],
-  "host_permissions": ["<all_urls>", "http://localhost:4000/*"],
   "background": {
     "service_worker": "background.js"
   },

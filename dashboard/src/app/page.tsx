@@ -85,9 +85,39 @@ export default function DashboardPage() {
   const [data, setData] = useState<StatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string>("Guest");
+  const [displayName, setDisplayName] = useState<string | null>(null);
 
   useEffect(() => {
-    setUserId(localStorage.getItem("userId") ?? "Guest");
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const paramUserId = params.get("userId");
+    const paramDisplayName = params.get("displayName");
+    if (paramUserId && paramDisplayName) {
+      setUserId(paramUserId);
+      setDisplayName(paramDisplayName);
+      try {
+        sessionStorage.setItem("illume_userId", paramUserId);
+        sessionStorage.setItem("illume_displayName", paramDisplayName);
+        localStorage.setItem("illume_userId", paramUserId);
+        localStorage.setItem("illume_displayName", paramDisplayName);
+      } catch {
+        // ignore
+      }
+      return;
+    }
+    const sessionUserId = sessionStorage.getItem("illume_userId");
+    const sessionDisplayName = sessionStorage.getItem("illume_displayName");
+    if (sessionUserId) {
+      setUserId(sessionUserId);
+      if (sessionDisplayName) setDisplayName(sessionDisplayName);
+      return;
+    }
+    const localUserId = localStorage.getItem("illume_userId") ?? localStorage.getItem("userId");
+    const localDisplayName = localStorage.getItem("illume_displayName");
+    if (localUserId && localUserId.trim()) {
+      setUserId(localUserId);
+      if (localDisplayName) setDisplayName(localDisplayName);
+    }
   }, []);
 
   const fetchDays = useMemo(() => {
@@ -281,10 +311,12 @@ export default function DashboardPage() {
             style={{ background: "var(--surface)", boxShadow: "0 4px 20px rgba(243, 205, 238, 0.2)" }}
           >
             <div className="w-14 h-14 rounded-full bg-[#424874] flex items-center justify-center text-white font-bold text-xl shrink-0 shadow-md">
-              {userId.charAt(0).toUpperCase()}
+              {(displayName ?? userId).charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">
-              <p className="font-bold text-[#424874] truncate text-lg">{userId}</p>
+              <p className="font-bold text-[#424874] truncate text-lg">
+                {displayName ?? (userId !== "Guest" ? userId : "Guest")}
+              </p>
               <p className="text-sm text-[#7b7fa3] font-medium">View and manage your detection stats</p>
             </div>
           </section>

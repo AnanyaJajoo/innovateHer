@@ -4,6 +4,9 @@
   const DASHBOARD_URL = 'http://localhost:3000';
   const AI_SCORE_CUTOFF = 10;
 
+  const USERINFO_URL = 'https://www.googleapis.com/oauth2/v2/userinfo';
+  const STORAGE_USER_KEY = 'illume_user';
+
   const elements = {
     currentUrl: document.getElementById('current-url'),
     riskValue: document.getElementById('risk-value'),
@@ -16,9 +19,86 @@
     aiScoreValue: document.getElementById('ai-score-value'),
     aiError: document.getElementById('ai-error'),
     btnDashboard: document.getElementById('btn-dashboard'),
+    userInfo: document.getElementById('user-info'),
+    userName: document.getElementById('user-name'),
+    userEmail: document.getElementById('user-email'),
+    btnSignin: document.getElementById('btn-signin'),
     linkSettings: document.getElementById('link-settings'),
     linkHelp: document.getElementById('link-help'),
   };
+
+  function getChromeUser(interactive) {
+    return new Promise(function (resolve) {
+      if (!chrome.identity || typeof chrome.identity.getAuthToken !== 'function') {
+        resolve(null);
+        return;
+      }
+      chrome.identity.getAuthToken({ interactive: !!interactive }, function (token) {
+        if (chrome.runtime.lastError || !token) {
+          resolve(null);
+          return;
+        }
+        fetch(USERINFO_URL, {
+          headers: { Authorization: 'Bearer ' + token },
+        })
+          .then(function (res) {
+            if (!res.ok) {
+              resolve(null);
+              return;
+            }
+            return res.json();
+          })
+          .then(function (data) {
+            if (!data || !data.email) {
+              resolve(null);
+              return;
+            }
+            resolve({
+              userId: data.email,
+              email: data.email,
+              displayName: data.name || data.email.split('@')[0],
+            });
+          })
+          .catch(function () {
+            resolve(null);
+          });
+      });
+    });
+  }
+
+  function setDashboardHref(user) {
+    if (!elements.btnDashboard) return;
+    let url = DASHBOARD_URL;
+    if (user && user.userId && user.displayName) {
+      url += '?userId=' + encodeURIComponent(user.userId) + '&displayName=' + encodeURIComponent(user.displayName);
+    }
+    elements.btnDashboard.href = url;
+  }
+
+  function showUser(user) {
+    if (!user) {
+      if (elements.userInfo) elements.userInfo.hidden = true;
+      if (elements.btnSignin) elements.btnSignin.hidden = false;
+      chrome.storage.local.remove(STORAGE_USER_KEY);
+      setDashboardHref(null);
+      return;
+    }
+    if (elements.userName) elements.userName.textContent = user.displayName || user.email;
+    if (elements.userEmail) {
+      elements.userEmail.textContent = user.email;
+      elements.userEmail.title = user.email;
+    }
+    if (elements.userInfo) elements.userInfo.hidden = false;
+    if (elements.btnSignin) elements.btnSignin.hidden = true;
+    chrome.storage.local.set({ [STORAGE_USER_KEY]: { userId: user.userId, displayName: user.displayName, email: user.email } });
+    setDashboardHref(user);
+  }
+
+  function loadChromeUser() {
+    getChromeUser(false).then(function (user) {
+      showUser(user);
+    });
+  }
 
   let baseRiskScore = null;
   let baseReasons = [];
@@ -287,10 +367,12 @@
     });
   }
 
-  elements.btnDashboard.href = DASHBOARD_URL;
-  elements.btnDashboard.addEventListener('click', (e) => {
+  chrome.storage.local.get([STORAGE_USER_KEY], function (items) {
+    setDashboardHref(items[STORAGE_USER_KEY] || null);
+  });
+  elements.btnDashboard.addEventListener('click', function (e) {
     e.preventDefault();
-    chrome.tabs.create({ url: DASHBOARD_URL });
+    chrome.tabs.create({ url: elements.btnDashboard.href });
   });
 
   elements.linkSettings.addEventListener('click', (e) => {
@@ -300,5 +382,17 @@
     e.preventDefault();
   });
 
+  if (elements.btnSignin) {
+    elements.btnSignin.addEventListener('click', function (e) {
+      e.preventDefault();
+      elements.btnSignin.disabled = true;
+      getChromeUser(true).then(function (user) {
+        showUser(user);
+        elements.btnSignin.disabled = false;
+      });
+    });
+  }
+
+  loadChromeUser();
   setCurrentTabUrlAndRisk();
 })();
