@@ -244,15 +244,42 @@ export default function DashboardPage() {
 
 
   return (
-    <div className="min-h-screen text-[#424874] p-6 flex flex-col" style={{ background: "var(--bg)" }}>
+    <div className="min-h-screen text-[#424874] p-6 pt-16 flex flex-col">
       <div className="max-w-5xl mx-auto flex-1 w-full">
-        <header className="mb-10 js-fade-up">
-          <h1 className="text-3xl font-bold tracking-tight text-[#424874]" style={{ fontFamily: "Nunito, sans-serif" }}>
-            Scams detected
-          </h1>
-          <p className="text-[#7b7fa3] text-base mt-2">
-            Number of scams detected over time
-          </p>
+        <header className="mb-10 js-fade-up flex items-start justify-between gap-6">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-[#424874]" style={{ fontFamily: "Nunito, sans-serif" }}>
+              Scams detected
+            </h1>
+            <p className="text-[#7b7fa3] text-base mt-2">
+              Number of scams detected over time
+            </p>
+          </div>
+          <div
+            className="flex items-center gap-3 px-4 py-2 rounded-full border-2 border-[#F3CDEE] bg-white/80 shadow-sm"
+            style={{ boxShadow: "0 4px 16px rgba(243, 205, 238, 0.3)" }}
+          >
+            <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-[#424874]">
+              <svg width="20" height="20" viewBox="0 0 40 40" aria-hidden="true">
+                <defs>
+                  <mask id="moon-cut">
+                    <rect width="40" height="40" fill="#fff" />
+                    <circle cx="24" cy="14" r="14" fill="#000" />
+                  </mask>
+                </defs>
+                <circle cx="18" cy="22" r="14" fill="#f3cdde" mask="url(#moon-cut)" />
+                <path
+                  d="M28 9l1.6 3.2L33 14l-3.4 1.8L28 19l-1.6-3.2L23 14l3.4-1.8L28 9z"
+                  fill="#f3cdde"
+                />
+                <path
+                  d="M31 22l1.2 2.3L35 25l-2.8 1.5L31 29l-1.2-2.5L27 25l2.8-0.7L31 22z"
+                  fill="#f3cdde"
+                />
+              </svg>
+            </span>
+            <span className="text-sm font-semibold text-[#424874]">Illume</span>
+          </div>
         </header>
 
         <div className="flex flex-wrap items-center gap-4 mb-8 js-fade-up">
