@@ -10,6 +10,14 @@ Detect risky websites and AI-generated listings, then visualize activity in the 
 | **dashboard/** | Next.js app (Recharts): stats charts, global vs user scope, visited sites. Proxies `/api/stats`, `/api/visited`, `/api/events`, and backend health/site-risk. User identity from URL params (when opened from extension) or from session/localStorage. |
 | **backend/**   | Express + MongoDB API: scoring, risk assessments, scans, metrics, stats, visited, events. |
 
+**User authentication**
+
+| Component   | Auth approach |
+|------------|----------------|
+| **Extension** | Chrome `identity` API (Google OAuth). Sign in with Google in the popup; stores `userId` (email), `displayName` in `chrome.storage.local`; passes them to the dashboard when opening “Open Dashboard”. |
+| **Dashboard** | No login form. Identity from URL params (when opened from extension), then sessionStorage/localStorage. Anonymous users use `anonId` for user-scoped stats; footer shows Google username when available. |
+| **Backend**   | No login/sessions. Accepts `userId` or `anonId` on requests; scopes stats and events by these identifiers. |
+
 ## Run locally
 
 1. **Backend** (default port 4000):
