@@ -75,6 +75,10 @@ extractProductImageDetectRouter.post(
       });
     }
 
+    console.log(
+      `[ai-image-detect] extracted image url: ${imageResult.imageUrl}`
+    );
+
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "rd-"));
 
     try {

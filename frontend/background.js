@@ -44,11 +44,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             sendResponse({ error: data.error || 'Request failed', suggestions: [] });
             return;
           }
-          if (data.productName) {
-            console.log('[InnovateHer] Product name found:', data.productName);
-          } else {
-            console.log('[InnovateHer] No product name found for URL:', message.url);
-          }
           sendResponse({
             productName: data.productName,
             suggestions: data.suggestions || [],
@@ -57,6 +52,31 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       })
       .catch(function () {
         sendResponse({ error: 'Backend unreachable', suggestions: [] });
+      });
+    return true;
+  }
+
+  if (message.type === 'GET_AI_IMAGE_DETECT') {
+    if (!message.url) {
+      sendResponse({ error: 'Missing url' });
+      return true;
+    }
+    fetch(BACKEND_URL + '/api/extract-product-image-detect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: message.url }),
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          if (!res.ok) {
+            sendResponse({ error: data.error || 'Request failed' });
+            return;
+          }
+          sendResponse({ detection: data.detection || null, image: data.image || null });
+        });
+      })
+      .catch(function () {
+        sendResponse({ error: 'Backend unreachable' });
       });
     return true;
   }

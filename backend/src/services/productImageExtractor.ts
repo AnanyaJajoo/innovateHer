@@ -17,6 +17,10 @@ type LimitFn = <T>(fn: () => Promise<T>) => Promise<T>;
 
 let limitPromise: Promise<LimitFn> | null = null;
 
+if (!process.env.PLAYWRIGHT_BROWSERS_PATH) {
+  process.env.PLAYWRIGHT_BROWSERS_PATH = "0";
+}
+
 const getPlaywrightLimit = async () => {
   if (!limitPromise) {
     limitPromise = import("p-limit").then(
