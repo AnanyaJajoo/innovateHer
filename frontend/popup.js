@@ -18,6 +18,10 @@
     aiScore: document.getElementById('ai-score'),
     aiScoreValue: document.getElementById('ai-score-value'),
     aiError: document.getElementById('ai-error'),
+    suggestionsSection: document.getElementById('suggestions-section'),
+    suggestionsStatus: document.getElementById('suggestions-status'),
+    suggestionsList: document.getElementById('suggestions-list'),
+    suggestionsError: document.getElementById('suggestions-error'),
     btnDashboard: document.getElementById('btn-dashboard'),
     userInfo: document.getElementById('user-info'),
     userName: document.getElementById('user-name'),
@@ -294,6 +298,73 @@
     if (elements.aiScore) elements.aiScore.hidden = true;
   }
 
+  function setSuggestionsLoading() {
+    if (elements.suggestionsSection) elements.suggestionsSection.hidden = false;
+    if (elements.suggestionsStatus) {
+      elements.suggestionsStatus.textContent = 'Checking recommendations…';
+      elements.suggestionsStatus.hidden = false;
+    }
+    if (elements.suggestionsList) elements.suggestionsList.hidden = true;
+    if (elements.suggestionsError) elements.suggestionsError.hidden = true;
+  }
+
+  function setSuggestionsError(message) {
+    if (elements.suggestionsSection) elements.suggestionsSection.hidden = false;
+    if (elements.suggestionsStatus) elements.suggestionsStatus.hidden = true;
+    if (elements.suggestionsList) elements.suggestionsList.hidden = true;
+    if (elements.suggestionsError) {
+      elements.suggestionsError.textContent = message;
+      elements.suggestionsError.hidden = false;
+    }
+  }
+
+  function renderSuggestions(productName, suggestions) {
+    if (!elements.suggestionsList) return;
+    elements.suggestionsList.innerHTML = '';
+
+    suggestions.forEach(function (item) {
+      const li = document.createElement('li');
+      li.className = 'suggestion-item';
+
+      const link = document.createElement('a');
+      link.className = 'suggestion-name';
+      link.textContent = item.name;
+      link.href = item.searchUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+
+      const meta = document.createElement('div');
+      meta.className = 'suggestion-meta';
+      const parts = [];
+      if (item.description) parts.push(item.description);
+      if (item.estimatedPriceRange) parts.push(item.estimatedPriceRange);
+      if (productName) parts.push('for "' + productName + '"');
+      meta.textContent = parts.join(' · ');
+
+      li.appendChild(link);
+      if (meta.textContent) li.appendChild(meta);
+      elements.suggestionsList.appendChild(li);
+    });
+
+    if (elements.suggestionsStatus) elements.suggestionsStatus.hidden = true;
+    elements.suggestionsList.hidden = suggestions.length === 0;
+  }
+
+  function setSuggestionsResult(productName, suggestions) {
+    if (elements.suggestionsSection) elements.suggestionsSection.hidden = false;
+    if (!Array.isArray(suggestions) || suggestions.length === 0) {
+      if (elements.suggestionsStatus) {
+        elements.suggestionsStatus.textContent = 'No recommendations available yet';
+        elements.suggestionsStatus.hidden = false;
+      }
+      if (elements.suggestionsList) elements.suggestionsList.hidden = true;
+      if (elements.suggestionsError) elements.suggestionsError.hidden = true;
+      return;
+    }
+    renderSuggestions(productName, suggestions);
+    if (elements.suggestionsError) elements.suggestionsError.hidden = true;
+  }
+
   function fetchSiteRisk(url) {
     setRiskLoading();
     chrome.runtime.sendMessage({ type: 'GET_SITE_RISK', url: url }, function (response) {
@@ -353,6 +424,31 @@
     });
   }
 
+  function fetchSuggestions(url) {
+    setSuggestionsLoading();
+    chrome.runtime.sendMessage({ type: 'GET_PRODUCT_SUGGESTIONS', url: url }, function (response) {
+      if (chrome.runtime.lastError) {
+        setSuggestionsError('Suggestions unavailable');
+        return;
+      }
+      if (response && response.error) {
+        setSuggestionsError(response.error);
+        return;
+      }
+      const suggestions = response && Array.isArray(response.suggestions) ? response.suggestions : [];
+      const verified = suggestions.filter(function (item) {
+        return (
+          item &&
+          typeof item.name === 'string' &&
+          item.name.trim().length > 0 &&
+          typeof item.searchUrl === 'string' &&
+          item.searchUrl.indexOf('http') === 0
+        );
+      });
+      setSuggestionsResult(response && response.productName ? response.productName : null, verified);
+    });
+  }
+
   function setCurrentTabUrlAndRisk() {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       const tab = tabs[0];
@@ -364,6 +460,7 @@
           baseReasons = [];
           aiScore = null;
           fetchSiteRisk(tab.url);
+          fetchSuggestions(tab.url);
           chrome.storage.local.get(['aiDetectionCache'], function (items) {
             const cache = items.aiDetectionCache || {};
             const cached = cache[tab.url];
@@ -378,11 +475,13 @@
         } else {
           setRiskUnavailable();
           if (elements.aiSection) elements.aiSection.hidden = true;
+          if (elements.suggestionsSection) elements.suggestionsSection.hidden = true;
         }
       } else {
         elements.currentUrl.textContent = '—';
         setRiskUnavailable();
         if (elements.aiSection) elements.aiSection.hidden = true;
+        if (elements.suggestionsSection) elements.suggestionsSection.hidden = true;
       }
     });
   }

@@ -1,8 +1,15 @@
 import { Router } from "express";
 import { extractProductName } from "../services/productNameExtractor";
 import { getSuggestedProducts } from "../services/geminiSuggestions";
+import { isDbReady } from "../db";
+import { ProductSuggestionCache } from "../models/ProductSuggestionCache";
+import { hashUrl, hashWithSalt } from "../utils/hash";
+import { normalizeUrl } from "../utils/normalizeUrl";
 
 export const productSuggestionsRouter = Router();
+
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const PRODUCT_SUGGESTIONS_SALT = "product-suggestions";
 
 const isValidHttpUrl = (value: string) => {
   try {
@@ -48,10 +55,14 @@ productSuggestionsRouter.post("/product-suggestions", async (req, res) => {
   }
 
   let productName: string | null = null;
+  let cacheKey: string | null = null;
 
   if (typeof providedName === "string" && providedName.trim().length > 0) {
     productName = providedName.trim();
+    cacheKey = hashWithSalt(productName.toLowerCase(), PRODUCT_SUGGESTIONS_SALT);
   } else if (typeof url === "string" && isValidHttpUrl(url)) {
+    const normalizedUrl = normalizeUrl(url).normalizedUrl;
+    cacheKey = hashUrl(normalizedUrl);
     const extraction = await extractProductName(url);
     productName = extraction.productName;
   }
@@ -65,9 +76,28 @@ productSuggestionsRouter.post("/product-suggestions", async (req, res) => {
     });
   }
 
+  const searchProvider = getSearchProvider(url);
+  if (cacheKey && isDbReady()) {
+    const cached = await ProductSuggestionCache.findOne({
+      cacheKey,
+      searchProvider
+    })
+      .lean()
+      .catch(() => null);
+    if (cached) {
+      const ageMs = Date.now() - new Date(cached.checkedAt).getTime();
+      if (ageMs < ONE_DAY_MS) {
+        return res.json({
+          productName: cached.productName,
+          suggestions: cached.suggestions
+        });
+      }
+    }
+  }
+
   try {
     const result = await getSuggestedProducts(productName, {
-      searchProvider: getSearchProvider(url),
+      searchProvider
     });
 
     if (result.error) {
@@ -78,9 +108,23 @@ productSuggestionsRouter.post("/product-suggestions", async (req, res) => {
       });
     }
 
+    if (cacheKey && isDbReady()) {
+      ProductSuggestionCache.findOneAndUpdate(
+        { cacheKey, searchProvider },
+        {
+          cacheKey,
+          searchProvider,
+          productName,
+          suggestions: result.suggestions,
+          checkedAt: new Date()
+        },
+        { upsert: true, new: true }
+      ).catch(console.error);
+    }
+
     return res.json({
       productName,
-      suggestions: result.suggestions,
+      suggestions: result.suggestions
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
