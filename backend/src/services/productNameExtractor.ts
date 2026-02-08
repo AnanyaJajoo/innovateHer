@@ -71,7 +71,7 @@ export async function extractProductName(
   if (titleText && titleText.trim().length > 2) {
     const cleaned = titleText
       .replace(
-        /\s*[\|–—-]\s*(Amazon|eBay|Walmart|Target|Shop|Store|Buy).*$/i,
+        /\s*[\|–—-]\s*(Amazon|eBay|Walmart|Target|Temu|Shop|Store|Buy).*$/i,
         ""
       )
       .trim();

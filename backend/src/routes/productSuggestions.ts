@@ -43,7 +43,8 @@ productSuggestionsRouter.post("/product-suggestions", async (req, res) => {
 
   console.log(`[InnovateHer] Product detected: "${productName}"`);
 
-  if (!productName) {
+  const genericNames = ["temu", "amazon", "amazon.com", "temu.com", "home", "shop", "store"];
+  if (!productName || genericNames.includes(productName.toLowerCase())) {
     return res.status(400).json({
       error: "Could not identify a product on this page.",
     });
