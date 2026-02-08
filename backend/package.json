@@ -10,12 +10,14 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@realitydefender/realitydefender": "^0.1.16",
     "cheerio": "^1.0.0-rc.12",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "mongoose": "^8.7.0",
     "multer": "^1.4.5-lts.1",
+    "openai": "^6.18.0",
     "p-limit": "^6.1.0",
     "playwright": "^1.49.0",
     "undici": "^6.19.8"

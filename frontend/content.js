@@ -35,6 +35,8 @@
     }
   }
 
+  var suggestionsFetched = false;
+
   var expandedStyles =
     '@import url("https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap");' +
     '.panel{display:none;width:320px;background:#fefaff;border-radius:20px;box-shadow:0 8px 32px rgba(243,205,238,0.35);border:2px solid #F3CDEE;overflow:hidden;font-family:"Nunito",system-ui,sans-serif;font-size:14px;color:#5c5c6a;}' +
@@ -57,7 +59,17 @@
     '.pill{cursor:pointer;user-select:none;padding:14px 20px;border-radius:16px;box-shadow:0 6px 24px rgba(243,205,238,0.3);border:2px solid #F3CDEE;font-size:16px;font-weight:700;background:#fff;color:#b5b8c4;font-family:"Nunito",system-ui,sans-serif;}' +
     '.pill:hover{box-shadow:0 8px 28px rgba(243,205,238,0.4);}' +
     '.container{display:flex;flex-direction:row-reverse;align-items:center;gap:0;}' +
-    '.container.panel-open .pill{display:none!important;}';
+    '.container.panel-open .pill{display:none!important;}' +
+    '.suggestions-section{margin-top:14px;background:#fdf5fc;border:2px solid #F3CDEE;border-radius:14px;padding:12px 14px;}' +
+    '.suggestions-loading{font-size:12px;color:#b5b8c4;font-style:italic;margin-top:6px;}' +
+    '.suggestions-error{font-size:12px;color:#d4a0a0;font-weight:600;margin-top:6px;}' +
+    '.suggestions-list{list-style:none;margin:0;padding:0;}' +
+    '.suggestion-item{padding:8px 0;border-bottom:1px solid #F3CDEE;}' +
+    '.suggestion-item:last-child{border-bottom:none;}' +
+    '.suggestion-name{display:block;font-size:13px;font-weight:600;color:#424874;text-decoration:none;line-height:1.3;}' +
+    '.suggestion-name:hover{text-decoration:underline;color:#353b62;}' +
+    '.suggestion-desc{font-size:11px;color:#b5b8c4;margin-top:2px;line-height:1.3;}' +
+    '.suggestion-price{font-size:11px;color:#7ba892;font-weight:600;margin-top:2px;}';
 
   function showPopup() {
     if (document.getElementById('innovateher-risk-popup')) return;
@@ -81,6 +93,7 @@
       '<header class="header"><div class="title">AI Image Detector</div><p class="tagline">Check if images on this page are AI-generated</p><button type="button" class="btn-close" id="btn-close" aria-label="Close">×</button></header>' +
       '<section class="section current-page"><span class="label">Current page</span><p class="url" id="panel-url">—</p></section>' +
       '<section class="section risk-section"><span class="label">Risk score</span><div class="risk-display"><span class="risk-value" id="panel-score">—</span><span class="risk-label" id="panel-label"></span></div><p class="risk-reasons" id="panel-reasons"></p><p class="risk-error" id="panel-error" style="display:none;"></p></section>' +
+      '<section class="section suggestions-section" id="suggestions-section" style="display:none;"><span class="label">Suggested Alternatives</span><p class="suggestions-loading" id="suggestions-loading">Finding similar products...</p><p class="suggestions-error" id="suggestions-error" style="display:none;"></p><ul class="suggestions-list" id="suggestions-list"></ul></section>' +
       '<a href="#" class="btn-dashboard" id="panel-dashboard">Open Dashboard</a>' +
       '<footer class="footer"><a href="#" id="panel-settings">Settings</a><span style="margin:0 6px;color:#F3CDEE;">·</span><a href="#" id="panel-help">Help</a></footer>' +
       '</div></div>' +
@@ -196,6 +209,78 @@
           riskData.error = null;
           updatePill(riskData.score, false);
           updatePanel();
+        }
+      }
+    );
+
+    // Fetch product suggestions — only on Amazon or Temu product pages
+    var suggestionsSection = root.getElementById('suggestions-section');
+    var suggestionsLoading = root.getElementById('suggestions-loading');
+    var suggestionsError = root.getElementById('suggestions-error');
+    var suggestionsList = root.getElementById('suggestions-list');
+
+    var currentHost = window.location.hostname.toLowerCase();
+    var isAmazonOrTemu = currentHost.includes('amazon.') || currentHost.includes('temu.');
+
+    if (!isAmazonOrTemu || suggestionsFetched) {
+      // Not Amazon/Temu or already fetched — skip product suggestions
+      suggestionsLoading.style.display = 'none';
+    }
+
+    isAmazonOrTemu && !suggestionsFetched && (suggestionsFetched = true) && chrome.runtime.sendMessage(
+      { type: 'GET_PRODUCT_SUGGESTIONS', url: window.location.href },
+      function (response) {
+        if (chrome.runtime.lastError) {
+          return;
+        }
+
+        suggestionsLoading.style.display = 'none';
+
+        if (response && response.error) {
+          suggestionsSection.style.display = 'block';
+          suggestionsError.textContent = response.error;
+          suggestionsError.style.display = 'block';
+          return;
+        }
+
+        if (response && response.productName) {
+          console.log('[InnovateHer] Product name found:', response.productName);
+        } else {
+          console.log('[InnovateHer] No product name found for this page');
+        }
+
+        if (response && response.suggestions && response.suggestions.length > 0) {
+          suggestionsSection.style.display = 'block';
+          suggestionsList.innerHTML = '';
+
+          response.suggestions.forEach(function (item) {
+            var li = document.createElement('li');
+            li.className = 'suggestion-item';
+
+            var a = document.createElement('a');
+            a.className = 'suggestion-name';
+            a.href = item.amazonSearchUrl;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.textContent = item.name;
+            li.appendChild(a);
+
+            if (item.description) {
+              var desc = document.createElement('div');
+              desc.className = 'suggestion-desc';
+              desc.textContent = item.description;
+              li.appendChild(desc);
+            }
+
+            if (item.estimatedPriceRange) {
+              var price = document.createElement('div');
+              price.className = 'suggestion-price';
+              price.textContent = item.estimatedPriceRange;
+              li.appendChild(price);
+            }
+
+            suggestionsList.appendChild(li);
+          });
         }
       }
     );
