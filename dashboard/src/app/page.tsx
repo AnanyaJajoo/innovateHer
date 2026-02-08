@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { animate, stagger } from "animejs";
 import {
   LineChart,
   Line,
@@ -186,6 +187,25 @@ export default function DashboardPage() {
     fetchStats();
   }, [fetchStats]);
 
+  useEffect(() => {
+    if (loading) return;
+    animate(".js-fade-up", {
+      opacity: [0, 1],
+      translateY: [14, 0],
+      duration: 700,
+      delay: stagger(90, { start: 120 }),
+      easing: "easeOutQuad"
+    });
+
+    animate(".js-fade-scale", {
+      opacity: [0, 1],
+      scale: [0.98, 1],
+      duration: 600,
+      delay: stagger(80, { start: 220 }),
+      easing: "easeOutQuad"
+    });
+  }, [loading, data]);
+
   // Always fetch user-scope stats for the "Scams Detected" box
   useEffect(() => {
     async function fetchUserScams() {
@@ -226,7 +246,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen text-[#424874] p-6 flex flex-col" style={{ background: "var(--bg)" }}>
       <div className="max-w-5xl mx-auto flex-1 w-full">
-        <header className="mb-10">
+        <header className="mb-10 js-fade-up">
           <h1 className="text-3xl font-bold tracking-tight text-[#424874]" style={{ fontFamily: "Nunito, sans-serif" }}>
             Scams detected
           </h1>
@@ -235,7 +255,7 @@ export default function DashboardPage() {
           </p>
         </header>
 
-        <div className="flex flex-wrap items-center gap-4 mb-8">
+        <div className="flex flex-wrap items-center gap-4 mb-8 js-fade-up">
           <div className="flex rounded-full overflow-hidden border-2 border-[#F3CDEE] p-1 shadow-sm" style={{ boxShadow: "0 4px 16px rgba(243, 205, 238, 0.3)" }}>
             <button
               onClick={() => setScope("global")}
@@ -289,7 +309,7 @@ export default function DashboardPage() {
           <>
             {/* Chart */}
             <section
-              className="rounded-3xl p-8 border-2 border-[#F3CDEE]"
+              className="rounded-3xl p-8 border-2 border-[#F3CDEE] js-fade-scale"
               style={{ background: "var(--surface)", boxShadow: "0 8px 32px rgba(243, 205, 238, 0.25)" }}
             >
               <div className="h-[400px] w-full">
@@ -354,14 +374,14 @@ export default function DashboardPage() {
             {/* Scams detected + Money saved boxes */}
             <div className="grid grid-cols-2 gap-6 mt-6">
               <section
-                className="rounded-3xl p-8 border-2 border-[#F3CDEE] text-center"
+                className="rounded-3xl p-8 border-2 border-[#F3CDEE] text-center js-fade-scale"
                 style={{ background: "var(--surface)", boxShadow: "0 4px 18px rgba(243, 205, 238, 0.2)" }}
               >
                 <p className="text-sm font-bold text-[#7b7fa3] uppercase tracking-wider mb-2">Scams Detected</p>
                 <p className="text-5xl font-bold text-[#424874]">{userScamsTotal.toLocaleString()}</p>
               </section>
               <section
-                className="rounded-3xl p-8 border-2 border-[#F3CDEE] text-center"
+                className="rounded-3xl p-8 border-2 border-[#F3CDEE] text-center js-fade-scale"
                 style={{ background: "var(--surface)", boxShadow: "0 4px 18px rgba(243, 205, 238, 0.2)" }}
               >
                 <p className="text-sm font-bold text-[#7b7fa3] uppercase tracking-wider mb-2">Money Saved</p>
@@ -371,7 +391,7 @@ export default function DashboardPage() {
 
             {/* Risky + Safe domains */}
             <section
-              className="rounded-3xl p-6 border-2 border-[#F3CDEE] mt-6"
+              className="rounded-3xl p-6 border-2 border-[#F3CDEE] mt-6 js-fade-scale"
               style={{ background: "var(--surface)", boxShadow: "0 4px 18px rgba(243, 205, 238, 0.2)" }}
             >
               <div className="grid md:grid-cols-2 gap-6">
@@ -435,7 +455,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <footer className="mt-12 pt-8 border-t-2 border-[#F3CDEE]">
+      <footer className="mt-12 pt-8 border-t-2 border-[#F3CDEE] js-fade-up">
         <div className="max-w-5xl mx-auto">
           <section
             className="rounded-3xl p-5 flex items-center gap-4 border-2 border-[#F3CDEE]"
