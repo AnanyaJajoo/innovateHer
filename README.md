@@ -30,6 +30,12 @@ Click the extension icon in the toolbar to open the popup.
 - **Event log** (for when extension sends data): `{ timestamp, domain, riskScore, category, price?, actionTaken }`. POST to `/api/events`. Privacy: store hashed URL paths; keep only domain + score bins.
 - **Run dashboard**: `cd dashboard && npm run dev`, then open http://localhost:3000.
 
+## Product image extraction API
+
+- **Endpoint**: `POST /api/extract-product-image`
+- **Example**:
+  `curl -X POST http://localhost:4000/api/extract-product-image -H "Content-Type: application/json" -d '{"url":"https://www.amazon.com/dp/B0C0Z3QG4Y"}'`
+
 ## Next steps
 
 - Implement backend (e.g. API or local model) for AI-image detection
