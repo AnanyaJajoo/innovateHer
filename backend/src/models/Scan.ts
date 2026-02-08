@@ -21,10 +21,14 @@ const schema = new Schema<ScanDocument>(
     confidence: { type: Number, required: true },
     reasons: { type: [Schema.Types.Mixed], required: true }
   },
-  { timestamps: { createdAt: true, updatedAt: false }, versionKey: false }
+  {
+    timestamps: { createdAt: true, updatedAt: false },
+    versionKey: false,
+    collection: "scans"
+  }
 );
 
 schema.index({ userId: 1, createdAt: -1 });
 schema.index({ domain: 1, createdAt: -1 });
 
-export const Scan = mongoose.model<ScanDocument>("Scan", schema);
+export const Scan = mongoose.model<ScanDocument>("Scan", schema, "scans");
