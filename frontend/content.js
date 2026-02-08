@@ -213,21 +213,24 @@
       }
     );
 
-    // Fetch product suggestions — only on Amazon or Temu product pages
+    // Fetch product suggestions — only on Amazon, Temu, or Walmart product pages
     var suggestionsSection = root.getElementById('suggestions-section');
     var suggestionsLoading = root.getElementById('suggestions-loading');
     var suggestionsError = root.getElementById('suggestions-error');
     var suggestionsList = root.getElementById('suggestions-list');
 
     var currentHost = window.location.hostname.toLowerCase();
-    var isAmazonOrTemu = currentHost.includes('amazon.') || currentHost.includes('temu.');
+    var isAmazonTemuOrWalmart =
+      currentHost.includes('amazon.') ||
+      currentHost.includes('temu.') ||
+      currentHost.includes('walmart.');
 
-    if (!isAmazonOrTemu || suggestionsFetched) {
-      // Not Amazon/Temu or already fetched — skip product suggestions
+    if (!isAmazonTemuOrWalmart || suggestionsFetched) {
+      // Not supported or already fetched — skip product suggestions
       suggestionsLoading.style.display = 'none';
     }
 
-    isAmazonOrTemu && !suggestionsFetched && (suggestionsFetched = true) && chrome.runtime.sendMessage(
+    isAmazonTemuOrWalmart && !suggestionsFetched && (suggestionsFetched = true) && chrome.runtime.sendMessage(
       { type: 'GET_PRODUCT_SUGGESTIONS', url: window.location.href },
       function (response) {
         if (chrome.runtime.lastError) {
@@ -259,7 +262,7 @@
 
             var a = document.createElement('a');
             a.className = 'suggestion-name';
-            a.href = item.amazonSearchUrl;
+            a.href = item.searchUrl || item.amazonSearchUrl;
             a.target = '_blank';
             a.rel = 'noopener noreferrer';
             a.textContent = item.name;

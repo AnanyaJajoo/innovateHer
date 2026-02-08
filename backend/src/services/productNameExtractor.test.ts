@@ -15,4 +15,13 @@ describe("extractNameFromUrl", () => {
     const result = extractNameFromUrl("https://www.temu.com/");
     expect(result).toBeNull();
   });
+
+  it("extracts a readable name from a Walmart product URL", () => {
+    const url =
+      "https://www.walmart.com/ip/Plaid-Dress-For-Women-Button-Down-Shirts-Dresses-Pocketed-Women-s-Christmas-Plaid-Dress-Long-Sleeve-Button-Down-Mini-Shirtdress-Clearance-Red-XL/1326107024";
+
+    const result = extractNameFromUrl(url);
+    expect(result).toContain("Plaid Dress For Women");
+    expect(result?.toLowerCase()).toContain("christmas");
+  });
 });

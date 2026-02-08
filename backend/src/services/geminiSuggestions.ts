@@ -1,7 +1,8 @@
 export interface ProductSuggestion {
   name: string;
   description: string;
-  amazonSearchUrl: string;
+  searchUrl: string;
+  amazonSearchUrl?: string;
   estimatedPriceRange?: string;
 }
 
@@ -10,8 +11,11 @@ export interface SuggestionsResult {
   error?: string;
 }
 
+export type SearchProvider = "amazon" | "walmart";
+
 export async function getSuggestedProducts(
-  productName: string
+  productName: string,
+  options?: { searchProvider?: SearchProvider }
 ): Promise<SuggestionsResult> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -74,18 +78,24 @@ Respond ONLY with a valid JSON array. No markdown, no code fences, no explanatio
       return { suggestions: [], error: "Unexpected Gemini response format" };
     }
 
+    const searchProvider = options?.searchProvider ?? "amazon";
     const suggestions: ProductSuggestion[] = parsed
       .filter((item) => typeof item.name === "string" && item.name.trim().length > 0)
       .slice(0, 3)
-      .map((item) => ({
-        name: item.name!.trim(),
-        description: item.description || "",
-        amazonSearchUrl: `https://www.amazon.com/s?k=${encodeURIComponent(item.name!.trim())}`,
-        estimatedPriceRange:
-          typeof item.estimatedPriceRange === "string" && item.estimatedPriceRange.trim().length > 0
-            ? item.estimatedPriceRange.trim()
-            : undefined,
-      }));
+      .map((item) => {
+        const name = item.name!.trim();
+        const searchUrl = buildSearchUrl(searchProvider, name);
+        return {
+          name,
+          description: item.description || "",
+          searchUrl,
+          amazonSearchUrl: searchProvider === "amazon" ? searchUrl : undefined,
+          estimatedPriceRange:
+            typeof item.estimatedPriceRange === "string" && item.estimatedPriceRange.trim().length > 0
+              ? item.estimatedPriceRange.trim()
+              : undefined,
+        };
+      });
 
     return { suggestions };
   } catch (error) {
@@ -93,6 +103,17 @@ Respond ONLY with a valid JSON array. No markdown, no code fences, no explanatio
     return { suggestions: [], error: `Gemini API error: ${message}` };
   }
 }
+
+const buildSearchUrl = (provider: SearchProvider, query: string) => {
+  const encoded = encodeURIComponent(query);
+  switch (provider) {
+    case "walmart":
+      return `https://www.walmart.com/search?q=${encoded}`;
+    case "amazon":
+    default:
+      return `https://www.amazon.com/s?k=${encoded}`;
+  }
+};
 
 const parseSuggestionsFromText = (
   responseText: string

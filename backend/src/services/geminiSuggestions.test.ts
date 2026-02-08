@@ -58,7 +58,7 @@ describe("getSuggestedProducts", () => {
     expect(result.error).toBeUndefined();
     expect(result.suggestions).toHaveLength(1);
     expect(result.suggestions[0].name).toBe("Ceramic Mug");
-    expect(result.suggestions[0].amazonSearchUrl).toContain("Ceramic%20Mug");
+    expect(result.suggestions[0].searchUrl).toContain("Ceramic%20Mug");
   });
 
   it("accepts responses that wrap suggestions in an object", async () => {
@@ -92,6 +92,25 @@ describe("getSuggestedProducts", () => {
     expect(result.error).toBeUndefined();
     expect(result.suggestions).toHaveLength(1);
     expect(result.suggestions[0].name).toBe("Yoga Mat");
+  });
+
+  it("builds Walmart search URLs when requested", async () => {
+    const responseText = JSON.stringify([
+      { name: "Running Shoes", description: "Lightweight trainers" }
+    ]);
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => buildGeminiPayload(responseText)
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await getSuggestedProducts("Running shoes", {
+      searchProvider: "walmart"
+    });
+    expect(result.error).toBeUndefined();
+    expect(result.suggestions).toHaveLength(1);
+    expect(result.suggestions[0].searchUrl).toContain("walmart.com/search");
   });
 
   it("returns an error when Gemini returns empty content", async () => {

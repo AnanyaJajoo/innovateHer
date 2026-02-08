@@ -16,19 +16,34 @@ const isValidHttpUrl = (value: string) => {
 const isSupportedDomain = (url: string): boolean => {
   try {
     const host = new URL(url).hostname.toLowerCase();
-    return host.includes("amazon.") || host.includes("temu.");
+    return host.includes("amazon.") || host.includes("temu.") || host.includes("walmart.");
   } catch {
     return false;
   }
 };
 
+const getSearchProvider = (url: string | undefined) => {
+  if (!url) {
+    return "amazon";
+  }
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    if (host.includes("walmart.")) {
+      return "walmart";
+    }
+  } catch {
+    return "amazon";
+  }
+  return "amazon";
+};
+
 productSuggestionsRouter.post("/product-suggestions", async (req, res) => {
   const { url, productName: providedName } = req.body ?? {};
 
-  // Only process Amazon and Temu URLs
+  // Only process Amazon, Temu, and Walmart URLs
   if (typeof url === "string" && !isSupportedDomain(url)) {
     return res.status(400).json({
-      error: "Product suggestions are only supported for Amazon and Temu.",
+      error: "Product suggestions are only supported for Amazon, Temu, and Walmart.",
     });
   }
 
@@ -51,7 +66,9 @@ productSuggestionsRouter.post("/product-suggestions", async (req, res) => {
   }
 
   try {
-    const result = await getSuggestedProducts(productName);
+    const result = await getSuggestedProducts(productName, {
+      searchProvider: getSearchProvider(url),
+    });
 
     if (result.error) {
       return res.status(502).json({

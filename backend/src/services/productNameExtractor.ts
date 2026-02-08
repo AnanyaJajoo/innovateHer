@@ -118,33 +118,55 @@ export const extractNameFromUrl = (url: string): string | null => {
       return null;
     }
 
-    const lastSegment = path.split("/").filter(Boolean).pop();
+    const segments = path.split("/").filter(Boolean);
+    if (segments.length === 0) {
+      return null;
+    }
+
+    // Walmart product URLs often look like /ip/<product-name>/<id>
+    const ipIndex = segments.indexOf("ip");
+    if (ipIndex !== -1 && segments[ipIndex + 1]) {
+      const walmartName = segments[ipIndex + 1];
+      const normalizedWalmart = normalizeSlug(walmartName);
+      return normalizedWalmart ? normalizedWalmart : null;
+    }
+
+    const lastSegment = segments[segments.length - 1];
     if (!lastSegment) {
       return null;
     }
 
-    const withoutExt = lastSegment.replace(/\.html?$/i, "");
-    const withoutId = withoutExt.replace(/-g-\d+$/i, "");
-    const normalized = withoutId
-      .replace(/[-_]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    if (!normalized || normalized.length <= 2) {
-      return null;
-    }
-
-    const titleCased = normalized
-      .split(" ")
-      .map((word) =>
-        word.length > 2 ? word[0].toUpperCase() + word.slice(1) : word
-      )
-      .join(" ");
-
-    return isUsableName(titleCased) ? titleCased : null;
+    const normalized = normalizeSlug(lastSegment);
+    return normalized ? normalized : null;
   } catch {
     return null;
   }
+};
+
+const normalizeSlug = (segment: string): string | null => {
+  const withoutExt = segment.replace(/\.html?$/i, "");
+  const withoutId = withoutExt.replace(/-g-\d+$/i, "");
+  const numericOnly = /^\d+$/.test(withoutId);
+  if (numericOnly) {
+    return null;
+  }
+  const normalized = withoutId
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!normalized || normalized.length <= 2) {
+    return null;
+  }
+
+  const titleCased = normalized
+    .split(" ")
+    .map((word) =>
+      word.length > 2 ? word[0].toUpperCase() + word.slice(1) : word
+    )
+    .join(" ");
+
+  return isUsableName(titleCased) ? titleCased : null;
 };
 
 function findProductName(node: unknown): string | null {
