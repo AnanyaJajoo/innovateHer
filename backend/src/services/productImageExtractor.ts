@@ -1,6 +1,5 @@
 import { fetch } from "undici";
 import * as cheerio from "cheerio";
-import pLimit from "p-limit";
 import { chromium } from "playwright";
 
 const USER_AGENT =
@@ -14,7 +13,18 @@ const MIN_WIDTH = 200;
 const IMAGE_EXT_REGEX =
   /\.(png|jpe?g|webp|gif|avif|bmp|svg)(\?|#|$)/i;
 
-const playwrightLimit = pLimit(PLAYWRIGHT_CONCURRENCY);
+type LimitFn = <T>(fn: () => Promise<T>) => Promise<T>;
+
+let limitPromise: Promise<LimitFn> | null = null;
+
+const getPlaywrightLimit = async () => {
+  if (!limitPromise) {
+    limitPromise = import("p-limit").then(
+      (mod) => (mod as { default: (n: number) => LimitFn }).default
+    ).then((createLimit) => createLimit(PLAYWRIGHT_CONCURRENCY));
+  }
+  return limitPromise;
+};
 
 export type ExtractDebug = {
   ogImage?: string;
@@ -195,6 +205,16 @@ const extractFromMetadata = async (
 ): Promise<ExtractResult> => {
   const { ogImage, twitterImage, jsonLdImages } =
     extractMetadataCandidates(html);
+  let queryImage: string | undefined;
+  try {
+    const parsed = new URL(baseUrl);
+    const topGalleryUrl = parsed.searchParams.get("top_gallery_url");
+    if (topGalleryUrl) {
+      queryImage = topGalleryUrl;
+    }
+  } catch {
+    queryImage = undefined;
+  }
 
   const candidates: Array<{ url: string; reason: string }> = [];
   if (ogImage) {
@@ -202,6 +222,9 @@ const extractFromMetadata = async (
   }
   if (twitterImage) {
     candidates.push({ url: twitterImage, reason: "twitter:image" });
+  }
+  if (queryImage) {
+    candidates.push({ url: queryImage, reason: "query:top_gallery_url" });
   }
   jsonLdImages.forEach((image) =>
     candidates.push({ url: image, reason: "json-ld" })
@@ -267,8 +290,9 @@ const validateImageUrl = async (candidateUrl: string): Promise<boolean> => {
   }
 };
 
-const extractWithPlaywright = async (url: string): Promise<ExtractResult> =>
-  playwrightLimit(async () => {
+const extractWithPlaywright = async (url: string): Promise<ExtractResult> => {
+  const limit = await getPlaywrightLimit();
+  return limit(async () => {
     let browser: Awaited<ReturnType<typeof chromium.launch>> | null = null;
     let page: import("playwright").Page | null = null;
 
@@ -337,6 +361,15 @@ const extractWithPlaywright = async (url: string): Promise<ExtractResult> =>
               boost *= 1.4;
             }
             if (lowerUrl.includes("/images/g/01/")) {
+              boost *= 0.6;
+            }
+          }
+
+          if (lowerHost.includes("temu") || lowerUrl.includes("kwcdn.com")) {
+            if (lowerUrl.includes("kwcdn.com")) {
+              boost *= 1.4;
+            }
+            if (lowerUrl.includes("sprite") || lowerUrl.includes("icon")) {
               boost *= 0.6;
             }
           }
@@ -446,3 +479,4 @@ const extractWithPlaywright = async (url: string): Promise<ExtractResult> =>
       }
     }
   });
+};
