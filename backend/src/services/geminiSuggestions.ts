@@ -69,30 +69,22 @@ Respond ONLY with a valid JSON array. No markdown, no code fences, no explanatio
       return { suggestions: [], error: "Empty response from Gemini" };
     }
 
-    // Strip potential markdown code fences
-    const cleaned = responseText
-      .replace(/^```(?:json)?\s*/i, "")
-      .replace(/\s*```$/i, "")
-      .trim();
-
-    const parsed: Array<{
-      name?: string;
-      description?: string;
-      estimatedPriceRange?: string;
-    }> = JSON.parse(cleaned);
-
-    if (!Array.isArray(parsed)) {
+    const parsed = parseSuggestionsFromText(responseText);
+    if (!parsed) {
       return { suggestions: [], error: "Unexpected Gemini response format" };
     }
 
     const suggestions: ProductSuggestion[] = parsed
-      .filter((item) => item.name && typeof item.name === "string")
+      .filter((item) => typeof item.name === "string" && item.name.trim().length > 0)
       .slice(0, 3)
       .map((item) => ({
-        name: item.name!,
+        name: item.name!.trim(),
         description: item.description || "",
-        amazonSearchUrl: `https://www.amazon.com/s?k=${encodeURIComponent(item.name!)}`,
-        estimatedPriceRange: item.estimatedPriceRange || undefined,
+        amazonSearchUrl: `https://www.amazon.com/s?k=${encodeURIComponent(item.name!.trim())}`,
+        estimatedPriceRange:
+          typeof item.estimatedPriceRange === "string" && item.estimatedPriceRange.trim().length > 0
+            ? item.estimatedPriceRange.trim()
+            : undefined,
       }));
 
     return { suggestions };
@@ -101,3 +93,64 @@ Respond ONLY with a valid JSON array. No markdown, no code fences, no explanatio
     return { suggestions: [], error: `Gemini API error: ${message}` };
   }
 }
+
+const parseSuggestionsFromText = (
+  responseText: string
+): Array<{
+  name?: string;
+  description?: string;
+  estimatedPriceRange?: string;
+}> | null => {
+  // Strip potential markdown code fences
+  const cleaned = responseText
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  const tryParse = (value: string) => {
+    try {
+      return JSON.parse(value) as unknown;
+    } catch {
+      return null;
+    }
+  };
+
+  const unwrapSuggestions = (value: unknown) => {
+    if (Array.isArray(value)) {
+      return value;
+    }
+    if (
+      value &&
+      typeof value === "object" &&
+      Array.isArray((value as { suggestions?: unknown }).suggestions)
+    ) {
+      return (value as { suggestions: unknown[] }).suggestions;
+    }
+    return null;
+  };
+
+  const direct = unwrapSuggestions(tryParse(cleaned));
+  if (direct) {
+    return direct as Array<{
+      name?: string;
+      description?: string;
+      estimatedPriceRange?: string;
+    }>;
+  }
+
+  const start = cleaned.indexOf("[");
+  const end = cleaned.lastIndexOf("]");
+  if (start !== -1 && end > start) {
+    const bracketed = cleaned.slice(start, end + 1);
+    const bracketedParsed = unwrapSuggestions(tryParse(bracketed));
+    if (bracketedParsed) {
+      return bracketedParsed as Array<{
+        name?: string;
+        description?: string;
+        estimatedPriceRange?: string;
+      }>;
+    }
+  }
+
+  return null;
+};
