@@ -378,6 +378,15 @@ const extractWithPlaywright = async (url: string): Promise<ExtractResult> => {
             }
           }
 
+          if (lowerHost.includes("shein") || lowerUrl.includes("sheincdn") || lowerUrl.includes("shein-static")) {
+            if (lowerUrl.includes("sheincdn") || lowerUrl.includes("shein-static") || lowerUrl.includes("img.")) {
+              boost *= 1.3;
+            }
+            if (lowerUrl.includes("sprite") || lowerUrl.includes("icon") || lowerUrl.includes("logo")) {
+              boost *= 0.6;
+            }
+          }
+
           if (
             img.hasAttribute("data-a-dynamic-image") ||
             img.getAttribute("data-a-image-name") === "landingImage"

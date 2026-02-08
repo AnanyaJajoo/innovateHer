@@ -5,6 +5,10 @@
   var AI_SCORE_CUTOFF = 10;
   var MEDIUM_THRESHOLD = 30; // show popup only when score >= 30 (medium or high)
   var warningDismissed = false;
+  var lastAiRequestUrl = null;
+  var lastAiRequestTime = 0;
+  var AI_REQUEST_THROTTLE_MS = 15000; // only one AI image-detect request per URL per 15s
+  var lastCheckedPageUrl = null; // only run check once per page (one product image per page)
 
   function getCombinedScore(baseScore, aiScore) {
     if (typeof baseScore !== 'number' && typeof aiScore !== 'number') return null;
@@ -105,6 +109,10 @@
     if (document.getElementById('innovateher-risk-popup')) return;
     if (warningDismissed) return;
 
+    var pageUrl = window.location.href;
+    if (lastCheckedPageUrl === pageUrl) return; // already checked this page — one product image per page
+    lastCheckedPageUrl = pageUrl;
+
     var state = { baseScore: null, baseReasons: null, aiScore: null, siteDone: false, aiDone: false };
 
     function maybeShow() {
@@ -137,20 +145,41 @@
       (currentUrl.indexOf('http://') === 0 || currentUrl.indexOf('https://') === 0);
 
     if (isCheckableUrl) {
-      chrome.runtime.sendMessage(
-        { type: 'GET_AI_IMAGE_DETECT', url: currentUrl },
-        function (response) {
-          if (chrome.runtime.lastError) {
-            state.aiScore = null;
-          } else if (response && response.detection && typeof response.detection.finalScore === 'number') {
-            state.aiScore = applyAiScoreCutoff(response.detection.finalScore);
-          } else {
-            state.aiScore = null;
+      var now = Date.now();
+      if (lastAiRequestUrl === currentUrl && now - lastAiRequestTime < AI_REQUEST_THROTTLE_MS) {
+        state.aiScore = null;
+        state.aiDone = true;
+        maybeShow();
+      } else {
+        lastAiRequestUrl = currentUrl;
+        lastAiRequestTime = now;
+        chrome.runtime.sendMessage(
+          { type: 'GET_AI_IMAGE_DETECT', url: currentUrl },
+          function (response) {
+            if (chrome.runtime.lastError) {
+              state.aiScore = null;
+            } else if (response && response.detection && typeof response.detection.finalScore === 'number') {
+              state.aiScore = applyAiScoreCutoff(response.detection.finalScore);
+              try {
+                chrome.storage.local.get(['aiDetectionCache'], function (items) {
+                  var cache = items.aiDetectionCache || {};
+                  cache[currentUrl] = { detection: response.detection, image: response.image || null };
+                  var keys = Object.keys(cache);
+                  if (keys.length > 30) {
+                    keys.sort();
+                    for (var i = 0; i < keys.length - 30; i++) delete cache[keys[i]];
+                  }
+                  chrome.storage.local.set({ aiDetectionCache: cache });
+                });
+              } catch (e) {}
+            } else {
+              state.aiScore = null;
+            }
+            state.aiDone = true;
+            maybeShow();
           }
-          state.aiDone = true;
-          maybeShow();
-        }
-      );
+        );
+      }
     } else {
       state.aiScore = null;
       state.aiDone = true;

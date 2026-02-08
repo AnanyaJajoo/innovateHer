@@ -335,6 +335,16 @@
         aiScore = applyAiScoreCutoff(response.detection.finalScore);
         setAiResult(response.detection, imageInfo);
         updateRiskDisplay();
+        chrome.storage.local.get(['aiDetectionCache'], function (items) {
+          const cache = items.aiDetectionCache || {};
+          cache[url] = { detection: response.detection, image: response.image || null };
+          let keys = Object.keys(cache);
+          if (keys.length > 30) {
+            keys = keys.sort();
+            for (let i = 0; i < keys.length - 30; i++) delete cache[keys[i]];
+          }
+          chrome.storage.local.set({ aiDetectionCache: cache });
+        });
       } else {
         aiScore = null;
         setAiResult(null, imageInfo);
@@ -354,7 +364,17 @@
           baseReasons = [];
           aiScore = null;
           fetchSiteRisk(tab.url);
-          fetchAiDetection(tab.url);
+          chrome.storage.local.get(['aiDetectionCache'], function (items) {
+            const cache = items.aiDetectionCache || {};
+            const cached = cache[tab.url];
+            if (cached && cached.detection) {
+              aiScore = applyAiScoreCutoff(cached.detection.finalScore);
+              setAiResult(cached.detection, cached.image || null);
+              updateRiskDisplay();
+            } else {
+              fetchAiDetection(tab.url);
+            }
+          });
         } else {
           setRiskUnavailable();
           if (elements.aiSection) elements.aiSection.hidden = true;

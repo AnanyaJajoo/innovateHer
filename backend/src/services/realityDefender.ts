@@ -22,6 +22,7 @@ const createClient = () =>
   });
 
 export const uploadForDetection = async (filePath: string) => {
+  console.log("[RealityDefender] API: 1 call per image (upload + poll)", { filePath });
   const client = createClient();
   const { requestId } = await client.upload({ filePath });
   return { client, requestId };
